@@ -16,7 +16,7 @@ enum AppState: Equatable {
 }
 
 /// Categoría visual de un `AppState`, para que la vista elija color sin conocer los casos puntuales.
-enum StatusKind {
+enum StatusKind: Equatable {
     case neutral
     case active
     case warning

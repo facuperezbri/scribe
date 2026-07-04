@@ -34,3 +34,20 @@ targets:
         INFOPLIST_KEY_NSMicrophoneUsageDescription: "LocalDictate necesita acceso al micrófono para grabar tu voz y transcribirla localmente en esta Mac."
         MACOSX_DEPLOYMENT_TARGET: "13.0"
         ASSETCATALOG_COMPILER_APPICON_NAME: ""
+    scheme:
+      testTargets:
+        - LocalDictateTests
+  LocalDictateTests:
+    type: bundle.unit-test
+    platform: macOS
+    sources:
+      - path: LocalDictateTests
+    dependencies:
+      - target: LocalDictate
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.localdictate.app.tests
+        GENERATE_INFOPLIST_FILE: YES
+        CODE_SIGN_STYLE: Automatic
+        DEVELOPMENT_TEAM: "2LCM5MU5MF"
+        MACOSX_DEPLOYMENT_TARGET: "13.0"

@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		025853BF893577C760477C99 /* AudioRecorderService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 140ABFEC4B5E9E54451BC572 /* AudioRecorderService.swift */; };
+		03D4448D491EB175F6DBAE7B /* SmokeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0C4DA36840A172AFCCFB97B7 /* SmokeTests.swift */; };
 		4059F80230CA4D1E926537CC /* RecordingButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0D80CF21D1F7AF2BC4D8F8 /* RecordingButton.swift */; };
 		42585D09432D62E93E29C746 /* PrivacyNoteView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B41215445F5A53ED364FA474 /* PrivacyNoteView.swift */; };
 		583FDB99F9C4EACD87D0C2D6 /* ClipboardService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 03D60CA5C4068DC7B785F137 /* ClipboardService.swift */; };
@@ -21,22 +22,36 @@
 		BB55A6322988C507E1ADEF05 /* MicrophonePermissionManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 37E263B7B594EA1F93C0A305 /* MicrophonePermissionManager.swift */; };
 		C92798B238F5225990239786 /* StatusBadgeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CE5F204E4C9AE66208E3D8EA /* StatusBadgeView.swift */; };
 		CE419DA6FD2774595C3C1FE1 /* DictationViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = FED3C5EE86577C2050A95313 /* DictationViewModel.swift */; };
+		D232A8FFA582D9C53FF1E9AE /* DictationViewModelPresentationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AFBD4941A270A23DB2E8304D /* DictationViewModelPresentationTests.swift */; };
 		E146011F210292C05D42E4C5 /* TranscribingFeedbackView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 06BB826B0E54121CEED448CF /* TranscribingFeedbackView.swift */; };
 		F02797E8E86EA0409A46DD07 /* WhisperKit in Frameworks */ = {isa = PBXBuildFile; productRef = 4B0AA3A3DD168D5E181A378D /* WhisperKit */; };
 /* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		4282B2B66A55D07BC81846BA /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 40978AF18E40C81F2FD8959C /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 7B9218E2CE8ADFC807D28924;
+			remoteInfo = LocalDictate;
+		};
+/* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
 		03D60CA5C4068DC7B785F137 /* ClipboardService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipboardService.swift; sourceTree = "<group>"; };
 		06BB826B0E54121CEED448CF /* TranscribingFeedbackView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TranscribingFeedbackView.swift; sourceTree = "<group>"; };
 		08D45F73CC026F7532352E94 /* ModelStatusView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModelStatusView.swift; sourceTree = "<group>"; };
 		09C68E4BF4642F244E8A44CC /* RecordingFeedbackView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecordingFeedbackView.swift; sourceTree = "<group>"; };
+		0C4DA36840A172AFCCFB97B7 /* SmokeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SmokeTests.swift; sourceTree = "<group>"; };
 		140ABFEC4B5E9E54451BC572 /* AudioRecorderService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioRecorderService.swift; sourceTree = "<group>"; };
+		1F2E2B9A53E3BA95998B855C /* LocalDictateTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = LocalDictateTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		37E263B7B594EA1F93C0A305 /* MicrophonePermissionManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MicrophonePermissionManager.swift; sourceTree = "<group>"; };
 		4714AEAAD189B89EE59D8F0F /* LocalDictateApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalDictateApp.swift; sourceTree = "<group>"; };
 		4BC8611AE9D0F2C6025AD1AA /* TranscriptEditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TranscriptEditorView.swift; sourceTree = "<group>"; };
 		542C32418CADFA8188C3CA80 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		93FEC38C157FD0ED3488D751 /* TranscriptionService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TranscriptionService.swift; sourceTree = "<group>"; };
 		AC0D292F4B7C89D8CF51A2B7 /* ModelManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModelManager.swift; sourceTree = "<group>"; };
+		AFBD4941A270A23DB2E8304D /* DictationViewModelPresentationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DictationViewModelPresentationTests.swift; sourceTree = "<group>"; };
 		B41215445F5A53ED364FA474 /* PrivacyNoteView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PrivacyNoteView.swift; sourceTree = "<group>"; };
 		BB0D80CF21D1F7AF2BC4D8F8 /* RecordingButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecordingButton.swift; sourceTree = "<group>"; };
 		C3478B2823CB669F4F1B541C /* LocalDictate.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = LocalDictate.entitlements; sourceTree = "<group>"; };
@@ -57,10 +72,20 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		1DABB3A51E2A705EFB54E861 /* LocalDictateTests */ = {
+			isa = PBXGroup;
+			children = (
+				AFBD4941A270A23DB2E8304D /* DictationViewModelPresentationTests.swift */,
+				0C4DA36840A172AFCCFB97B7 /* SmokeTests.swift */,
+			);
+			path = LocalDictateTests;
+			sourceTree = "<group>";
+		};
 		94BFC67B70740067E06839AF = {
 			isa = PBXGroup;
 			children = (
 				ABE6F67A5B9C2D2D477140BD /* LocalDictate */,
+				1DABB3A51E2A705EFB54E861 /* LocalDictateTests */,
 				E1EB9DBEE9819BA49DE8639C /* Products */,
 			);
 			sourceTree = "<group>";
@@ -92,6 +117,7 @@
 			isa = PBXGroup;
 			children = (
 				E10BFA4ECD12238B6FB8BBD4 /* LocalDictate.app */,
+				1F2E2B9A53E3BA95998B855C /* LocalDictateTests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -99,6 +125,24 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
+		29F52A77D3626092FBCF31F3 /* LocalDictateTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = D4F558D7C66A2DEA1DE9CEA7 /* Build configuration list for PBXNativeTarget "LocalDictateTests" */;
+			buildPhases = (
+				8CE6C7C4CF73DD8066E4882B /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				DF10C3BE71F2C2084E3A1CD1 /* PBXTargetDependency */,
+			);
+			name = LocalDictateTests;
+			packageProductDependencies = (
+			);
+			productName = LocalDictateTests;
+			productReference = 1F2E2B9A53E3BA95998B855C /* LocalDictateTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
 		7B9218E2CE8ADFC807D28924 /* LocalDictate */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = C4728A364C4D5D8D801118F9 /* Build configuration list for PBXNativeTarget "LocalDictate" */;
@@ -127,6 +171,10 @@
 				BuildIndependentTargetsInParallel = YES;
 				LastUpgradeCheck = 1430;
 				TargetAttributes = {
+					29F52A77D3626092FBCF31F3 = {
+						DevelopmentTeam = 2LCM5MU5MF;
+						ProvisioningStyle = Automatic;
+					};
 					7B9218E2CE8ADFC807D28924 = {
 						DevelopmentTeam = 2LCM5MU5MF;
 						ProvisioningStyle = Automatic;
@@ -151,11 +199,21 @@
 			projectRoot = "";
 			targets = (
 				7B9218E2CE8ADFC807D28924 /* LocalDictate */,
+				29F52A77D3626092FBCF31F3 /* LocalDictateTests */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXSourcesBuildPhase section */
+		8CE6C7C4CF73DD8066E4882B /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				D232A8FFA582D9C53FF1E9AE /* DictationViewModelPresentationTests.swift in Sources */,
+				03D4448D491EB175F6DBAE7B /* SmokeTests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		D69B6ACA0C9E5B04C79B2DD8 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -179,6 +237,14 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		DF10C3BE71F2C2084E3A1CD1 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 7B9218E2CE8ADFC807D28924 /* LocalDictate */;
+			targetProxy = 4282B2B66A55D07BC81846BA /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
 		421B30415035EFD7794C696C /* Debug */ = {
@@ -356,6 +422,46 @@
 			};
 			name = Debug;
 		};
+		EEB3A736B10E325EF3073FEC /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				DEVELOPMENT_TEAM = 2LCM5MU5MF;
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@loader_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 13.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.localdictate.app.tests;
+				SDKROOT = macosx;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/LocalDictate.app/Contents/MacOS/LocalDictate";
+			};
+			name = Release;
+		};
+		F7DC6325D93FD8922C4A0784 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				DEVELOPMENT_TEAM = 2LCM5MU5MF;
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@loader_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 13.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.localdictate.app.tests;
+				SDKROOT = macosx;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/LocalDictate.app/Contents/MacOS/LocalDictate";
+			};
+			name = Debug;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -373,6 +479,15 @@
 			buildConfigurations = (
 				421B30415035EFD7794C696C /* Debug */,
 				5EEB13BFF0E27C506DCF59B6 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		D4F558D7C66A2DEA1DE9CEA7 /* Build configuration list for PBXNativeTarget "LocalDictateTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				F7DC6325D93FD8922C4A0784 /* Debug */,
+				EEB3A736B10E325EF3073FEC /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Debug;
