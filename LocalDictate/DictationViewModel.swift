@@ -51,6 +51,7 @@ final class DictationViewModel: ObservableObject {
     private(set) var lastRecordingURL: URL?
     private var meterTask: Task<Void, Never>?
     private var transcriptionTask: Task<Void, Never>?
+    private var pendingTranscriptSaveTask: Task<Void, Never>?
     /// Autoritativo para descartar un resultado de transcripción que llega tarde tras
     /// cancelar: `transcriptionTask?.cancel()` es solo un intento cooperativo (WhisperKit no
     /// garantiza abortar la inferencia a mitad de camino), así que no alcanza por sí solo.
@@ -69,7 +70,7 @@ final class DictationViewModel: ObservableObject {
         modelManager: ModelManaging = ModelManager(),
         microphonePermissionManager: MicrophonePermissionManaging = MicrophonePermissionManager(),
         clipboardService: ClipboardServicing = ClipboardService(),
-        transcriptStore: TranscriptStoring = UserDefaultsTranscriptStore(),
+        transcriptStore: TranscriptStoring = FileTranscriptStore(),
         transcriptionService: TranscriptionServicing? = nil
     ) {
         self.audioRecorder = audioRecorder
@@ -125,8 +126,16 @@ final class DictationViewModel: ObservableObject {
         }
     }
 
+    /// Guarda la transcripción con un pequeño debounce para no escribir a disco en cada
+    /// tecla presionada en el editor.
     private func persistTranscript() {
-        transcriptStore.saveTranscript(transcript)
+        pendingTranscriptSaveTask?.cancel()
+        let textToSave = transcript
+        pendingTranscriptSaveTask = Task { [weak self] in
+            try? await Task.sleep(for: .milliseconds(500))
+            guard !Task.isCancelled else { return }
+            self?.transcriptStore.saveTranscript(textToSave)
+        }
     }
 
     var recordButtonTitle: String {

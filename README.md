@@ -108,6 +108,15 @@ El uso directo de WhisperKit queda confinado a `ModelManager` y
 - Se guarda en `~/Library/Application Support/LocalDictate/Models`.
 - El idioma de transcripción está fijo en español (`TranscriptionService`).
 
+## Transcripción
+
+- La última transcripción se guarda en
+  `~/Library/Application Support/LocalDictate/last-transcript.txt`
+  (`FileTranscriptStore`), con un pequeño debounce para no escribir a disco
+  en cada tecla presionada. Se restaura automáticamente al abrir la app.
+- `UserDefaults` solo se usa para preferencias chicas (por ejemplo, la ruta
+  del modelo instalado), nunca para el texto de la transcripción.
+
 ## Solución de problemas
 
 ### macOS pide permiso de micrófono repetidamente, en cada reinstalación

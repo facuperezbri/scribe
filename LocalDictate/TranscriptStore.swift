@@ -5,22 +5,46 @@ protocol TranscriptStoring {
     func saveTranscript(_ text: String)
 }
 
-/// Persiste la última transcripción en `UserDefaults`.
-///
-/// TODO(Fase 4): mover a un archivo bajo Application Support — `UserDefaults` no es
-/// apropiado para texto potencialmente largo.
-final class UserDefaultsTranscriptStore: TranscriptStoring {
-    private static let key = "LocalDictate.lastTranscript"
+/// Persiste la última transcripción en un archivo local bajo Application Support.
+/// `UserDefaults` no es apropiado para texto potencialmente largo.
+final class FileTranscriptStore: TranscriptStoring {
+    private static let legacyUserDefaultsKey = "LocalDictate.lastTranscript"
+
+    private let fileURL: URL
+
+    init(fileURL: URL) {
+        self.fileURL = fileURL
+        try? FileManager.default.createDirectory(
+            at: fileURL.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
+    }
+
+    convenience init() {
+        let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+        let directory = appSupport.appendingPathComponent("LocalDictate", isDirectory: true)
+        self.init(fileURL: directory.appendingPathComponent("last-transcript.txt"))
+        migrateFromUserDefaultsIfNeeded()
+    }
+
+    /// Migra una transcripción guardada por una versión anterior de la app (que usaba
+    /// `UserDefaults`) al nuevo archivo, una sola vez.
+    private func migrateFromUserDefaultsIfNeeded() {
+        guard !FileManager.default.fileExists(atPath: fileURL.path) else { return }
+        guard let legacy = UserDefaults.standard.string(forKey: Self.legacyUserDefaultsKey), !legacy.isEmpty else { return }
+        try? legacy.write(to: fileURL, atomically: true, encoding: .utf8)
+        UserDefaults.standard.removeObject(forKey: Self.legacyUserDefaultsKey)
+    }
 
     func loadTranscript() -> String? {
-        UserDefaults.standard.string(forKey: Self.key)
+        try? String(contentsOf: fileURL, encoding: .utf8)
     }
 
     func saveTranscript(_ text: String) {
         if text.isEmpty {
-            UserDefaults.standard.removeObject(forKey: Self.key)
+            try? FileManager.default.removeItem(at: fileURL)
         } else {
-            UserDefaults.standard.set(text, forKey: Self.key)
+            try? text.write(to: fileURL, atomically: true, encoding: .utf8)
         }
     }
 }
