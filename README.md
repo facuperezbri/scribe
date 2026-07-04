@@ -40,6 +40,23 @@ xcodebuild -project LocalDictate.xcodeproj -scheme LocalDictate \
   -configuration Debug -destination 'platform=macOS' build
 ```
 
+## Correr los tests
+
+Los tests viven en el target `LocalDictateTests` (unit tests, sin UI tests).
+No requieren micrófono real, descarga de modelo ni WhisperKit: solo ejercitan
+lógica pura de `DictationViewModel` manipulando su estado directamente.
+
+Desde Xcode: ⌘U con el esquema `LocalDictate` (los tests están incluidos en
+su acción de test).
+
+Desde la terminal:
+
+```bash
+xcodegen generate
+xcodebuild -project LocalDictate.xcodeproj -scheme LocalDictate \
+  -configuration Debug -destination 'platform=macOS' test
+```
+
 ## Uso
 
 1. Pulsar "Grabar" y hablar en español. Mientras se grava se muestra el
