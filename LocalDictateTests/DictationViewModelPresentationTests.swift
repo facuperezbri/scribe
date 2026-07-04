@@ -36,14 +36,14 @@ final class DictationViewModelPresentationTests: XCTestCase {
         viewModel.state = .microphonePermissionDenied
         XCTAssertEqual(viewModel.statusKind, .error)
 
-        viewModel.state = .error("boom")
+        viewModel.state = .error(AppError(category: .unknown, message: "boom"))
         XCTAssertEqual(viewModel.statusKind, .error)
     }
 
     func testIsErrorOnlyForErrorStates() {
         let viewModel = DictationViewModel()
 
-        viewModel.state = .error("boom")
+        viewModel.state = .error(AppError(category: .unknown, message: "boom"))
         XCTAssertTrue(viewModel.isError)
 
         viewModel.state = .microphonePermissionDenied

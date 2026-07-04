@@ -12,7 +12,7 @@ enum AppState: Equatable {
     case transcriptReady
     case missingModel
     case downloadingModel
-    case error(String)
+    case error(AppError)
 }
 
 /// Categoría visual de un `AppState`, para que la vista elija color sin conocer los casos puntuales.
@@ -61,7 +61,10 @@ final class DictationViewModel: ObservableObject {
     /// puede disparar dos grabaciones que se pisan entre sí.
     private var isStartingRecording = false
 
-    private static let restrictedMicrophoneMessage = "El acceso al micrófono está restringido en este equipo (gestión parental o de la organización). No se puede habilitar desde la app."
+    private static let restrictedMicrophoneError = AppError(
+        category: .microphonePermission,
+        message: "El acceso al micrófono está restringido en este equipo (gestión parental o de la organización). No se puede habilitar desde la app."
+    )
     private static let softWarningThreshold: TimeInterval = 120
     private static let strongWarningThreshold: TimeInterval = 300
 
@@ -103,7 +106,7 @@ final class DictationViewModel: ObservableObject {
         case .denied:
             return .microphonePermissionDenied
         case .restricted:
-            return .error(Self.restrictedMicrophoneMessage)
+            return .error(Self.restrictedMicrophoneError)
         case .authorized, .notDetermined:
             return .ready
         }
@@ -119,8 +122,8 @@ final class DictationViewModel: ObservableObject {
             return "Modelo no instalado. Podés grabar, pero necesitás descargarlo para transcribir."
         case .microphonePermissionDenied:
             return "Micrófono bloqueado. Habilitalo en Ajustes del Sistema para poder grabar."
-        case .error(let message):
-            return message
+        case .error(let appError):
+            return appError.message
         default:
             return "Listo"
         }
@@ -273,7 +276,7 @@ final class DictationViewModel: ObservableObject {
             statusText = "Micrófono bloqueado. Habilitalo en Ajustes del Sistema para poder grabar."
 
         case .restricted:
-            state = .error(Self.restrictedMicrophoneMessage)
+            state = .error(Self.restrictedMicrophoneError)
         }
     }
 
@@ -291,8 +294,9 @@ final class DictationViewModel: ObservableObject {
             statusText = "Grabando..."
             startMetering()
         } catch {
-            state = .error(error.localizedDescription)
-            statusText = "No se pudo iniciar la grabación."
+            let appError = AppError(category: .recording, underlying: error)
+            state = .error(appError)
+            statusText = appError.message
         }
     }
 
@@ -304,8 +308,9 @@ final class DictationViewModel: ObservableObject {
         statusText = "Deteniendo grabación..."
 
         guard let url = audioRecorder.stopRecording() else {
-            state = .error("No se encontró el audio grabado.")
-            statusText = "No se encontró el audio grabado."
+            let appError = AppError(category: .recording, message: "No se encontró el audio grabado.")
+            state = .error(appError)
+            statusText = appError.message
             return
         }
         lastRecordingURL = url
@@ -372,8 +377,9 @@ final class DictationViewModel: ObservableObject {
             lastRecordingURL = nil
         } catch {
             guard !isTranscriptionCancelled else { return }
-            state = .error(error.localizedDescription)
-            statusText = "No se pudo transcribir el audio: \(error.localizedDescription)"
+            let appError = AppError(category: .transcription, underlying: error)
+            state = .error(appError)
+            statusText = appError.message
         }
         transcriptionTask = nil
     }
@@ -401,8 +407,9 @@ final class DictationViewModel: ObservableObject {
                     statusText = "Modelo instalado. Listo."
                 }
             } catch {
+                let appError = AppError(category: .model, underlying: error)
                 state = .missingModel
-                statusText = "No se pudo descargar el modelo: \(error.localizedDescription)"
+                statusText = appError.message
             }
         }
     }
