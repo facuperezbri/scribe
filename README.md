@@ -1,38 +1,38 @@
 # LocalDictate
 
-Aplicación de escritorio para macOS que graba voz en español y la transcribe
-completamente en el dispositivo, usando [WhisperKit](https://github.com/argmaxinc/argmax-oss-swift)
-(Whisper en Core ML) de Argmax. No hay backend, no hay analítica ni telemetría,
-no hay login ni pagos.
+macOS desktop app that records speech in Spanish and transcribes it fully
+on-device, using [WhisperKit](https://github.com/argmaxinc/argmax-oss-swift)
+(Whisper on Core ML) from Argmax. There is no backend, no analytics or
+telemetry, no login and no payments.
 
-## Privacidad
+## Privacy
 
-> El audio y el texto se procesan localmente en esta Mac. No se envían a
-> servidores. Solo se usa internet para descargar el modelo si todavía no
-> está instalado.
+> Audio and text are processed locally on this Mac. Nothing is sent to
+> servers. The only use of the internet is to download the model if it
+> isn't installed yet.
 
-Esta es la única operación de red de toda la app: la descarga inicial del
-modelo de Whisper, disparada exclusivamente por el usuario desde el botón
-"Descargar modelo". `ModelManager` nunca descarga nada por sí solo; solo lee
-el disco para saber si el modelo ya está instalado.
+This is the only network operation in the whole app: the initial download
+of the Whisper model, triggered exclusively by the user via the "Descargar
+modelo" button. `ModelManager` never downloads anything on its own; it only
+reads disk to check whether the model is already installed.
 
-## Requisitos
+## Requirements
 
-- macOS 13 o superior
-- Xcode 15 o superior
+- macOS 13 or later
+- Xcode 15 or later
 - [xcodegen](https://github.com/yonaskolb/XcodeGen) (`brew install xcodegen`)
-- ~1 GB de espacio libre en disco para el modelo (`large-v3-v20240930_626MB`)
+- ~1 GB of free disk space for the model (`large-v3-v20240930_626MB`)
 
-## Compilar y ejecutar
+## Build and run
 
 ```bash
 xcodegen generate
 open LocalDictate.xcodeproj
 ```
 
-Y correr el esquema `LocalDictate` desde Xcode (⌘R).
+Then run the `LocalDictate` scheme from Xcode (⌘R).
 
-También se puede compilar desde la terminal:
+It can also be built from the terminal:
 
 ```bash
 xcodegen generate
@@ -40,16 +40,17 @@ xcodebuild -project LocalDictate.xcodeproj -scheme LocalDictate \
   -configuration Debug -destination 'platform=macOS' build
 ```
 
-## Correr los tests
+## Running the tests
 
-Los tests viven en el target `LocalDictateTests` (unit tests, sin UI tests).
-No requieren micrófono real, descarga de modelo ni WhisperKit: solo ejercitan
-lógica pura de `DictationViewModel` manipulando su estado directamente.
+The tests live in the `LocalDictateTests` target (unit tests, no UI tests).
+They don't require a real microphone, a model download, or WhisperKit: they
+only exercise `DictationViewModel`'s pure logic by manipulating its state
+directly.
 
-Desde Xcode: ⌘U con el esquema `LocalDictate` (los tests están incluidos en
-su acción de test).
+From Xcode: ⌘U with the `LocalDictate` scheme (the tests are wired into its
+test action).
 
-Desde la terminal:
+From the terminal:
 
 ```bash
 xcodegen generate
@@ -57,160 +58,174 @@ xcodebuild -project LocalDictate.xcodeproj -scheme LocalDictate \
   -configuration Debug -destination 'platform=macOS' test
 ```
 
-## Uso
+## Usage
 
-1. Pulsar "Grabar" y hablar en español. Mientras se grava se muestra el
-   tiempo transcurrido, un medidor del nivel de entrada del micrófono (para
-   confirmar que se está captando audio) y, pasados los 2 y 5 minutos, un
-   aviso de que la grabación es larga. Pulsar "Detener" para terminar.
-2. Si es la primera vez, hace falta descargar el modelo (~626 MB) con el
-   botón "Descargar modelo". La transcripción de la grabación pendiente
-   arranca automáticamente en cuanto termina la descarga.
-3. Mientras se transcribe se muestra un indicador de progreso indeterminado
-   (WhisperKit no expone progreso incremental para este paso) con un botón
-   "Cancelar". Cancelar es "soft": la app descarta el resultado en cuanto
-   llega, pero no puede garantizar que WhisperKit aborte la inferencia a
-   mitad de camino.
-4. El texto transcripto aparece en el área editable, con un contador de
-   palabras y caracteres debajo. Se puede corregir a mano, copiar con
-   "Copiar" o borrar con "Limpiar". Grabar de nuevo o limpiar con una
-   transcripción existente pide confirmación antes de reemplazarla o
-   borrarla.
-5. Con el modelo ya instalado, "Ver en Finder" abre la carpeta donde vive
-   en disco.
+1. Press "Grabar" and speak in Spanish. While recording, the app shows the
+   elapsed time, a meter for the microphone's input level (to confirm audio
+   is being captured), and, past 2 and 5 minutes, a warning that the
+   recording is getting long. Press "Detener" to stop.
+2. The first time, the model (~626 MB) needs to be downloaded with the
+   "Descargar modelo" button. Transcription of the pending recording starts
+   automatically as soon as the download finishes.
+3. While transcribing, an indeterminate progress indicator is shown
+   (WhisperKit doesn't expose incremental progress for this step) along with
+   a "Cancelar" button. Cancelling is "soft": the app discards the result as
+   soon as it arrives, but it can't guarantee WhisperKit will abort inference
+   midway.
+4. The transcribed text appears in the editable area, with a word/character
+   counter below it. It can be edited by hand, copied with "Copiar", or
+   cleared with "Limpiar". Recording again or clearing while there's an
+   existing transcript asks for confirmation before replacing or deleting it.
+5. Once the model is installed, "Ver en Finder" opens the folder where it
+   lives on disk.
 
-## Arquitectura
+## Architecture
 
-| Archivo | Responsabilidad |
+| File | Responsibility |
 |---|---|
-| `LocalDictateApp.swift` | Punto de entrada de la app (`WindowGroup`). |
-| `ContentView.swift` | Layout principal en SwiftUI y diálogos de confirmación. |
-| `DictationViewModel.swift` | Estado de la app y orquestación entre servicios. |
-| `RecordingButton.swift` | Botón principal de Grabar/Detener. |
-| `RecordingFeedbackView.swift` | Tiempo transcurrido, medidor de nivel y avisos por duración mientras se grava. |
-| `TranscribingFeedbackView.swift` | Indicador de progreso y botón de cancelar mientras se transcribe. |
-| `TranscriptEditorView.swift` | Área editable de la transcripción, con placeholder y contador de palabras/caracteres. |
-| `StatusBadgeView.swift` | Indicador compacto del estado actual de la app. |
-| `ModelStatusView.swift` | Estado del modelo (instalado / descargando / no instalado). |
-| `PrivacyNoteView.swift` | Nota de privacidad fija al pie de la ventana. |
-| `AudioRecorderService.swift` | Grabación de audio a WAV local (16 kHz, mono, 16-bit). |
-| `MicrophonePermissionManager.swift` | Permiso de micrófono del sistema. |
-| `ModelManager.swift` | Presencia y descarga explícita del modelo de WhisperKit. |
-| `TranscriptionService.swift` | Envuelve WhisperKit para transcribir localmente. |
-| `ClipboardService.swift` | Copiar texto al portapapeles. |
+| `LocalDictateApp.swift` | App entry point (`WindowGroup`). |
+| `ContentView.swift` | Main SwiftUI layout and confirmation dialogs. |
+| `DictationViewModel.swift` | App state and orchestration between services. |
+| `RecordingButton.swift` | Main Record/Stop button. |
+| `RecordingFeedbackView.swift` | Elapsed time, level meter, and duration warnings while recording. |
+| `TranscribingFeedbackView.swift` | Progress indicator and cancel button while transcribing. |
+| `TranscriptEditorView.swift` | Editable transcript area, with placeholder and word/character counter. |
+| `StatusBadgeView.swift` | Compact indicator of the app's current state. |
+| `ModelStatusView.swift` | Model status (installed / downloading / not installed). |
+| `PrivacyNoteView.swift` | Fixed privacy note at the bottom of the window. |
+| `AudioRecorderService.swift` | Records audio to a local WAV file (16 kHz, mono, 16-bit). |
+| `MicrophonePermissionManager.swift` | System microphone permission. |
+| `ModelManager.swift` | Presence and explicit download of the WhisperKit model. |
+| `TranscriptionService.swift` | Wraps WhisperKit to transcribe locally. |
+| `ClipboardService.swift` | Copies text to the clipboard. |
+| `AppError.swift` | Typed app error model and its category-to-message mapping. |
 
-El uso directo de WhisperKit queda confinado a `ModelManager` y
-`TranscriptionService`; el resto de la app no conoce esa dependencia.
+Direct use of WhisperKit is confined to `ModelManager` and
+`TranscriptionService`; the rest of the app doesn't know about that
+dependency.
 
-## Modelo
+## Model
 
-- Variante: `large-v3-v20240930_626MB` (repo `argmaxinc/whisperkit-coreml`).
-- Se guarda en `~/Library/Application Support/LocalDictate/Models`.
-- El idioma de transcripción está fijo en español (`TranscriptionService`).
+- Variant: `large-v3-v20240930_626MB` (repo `argmaxinc/whisperkit-coreml`).
+- Stored under `~/Library/Application Support/LocalDictate/Models`.
+- Transcription language is fixed to Spanish (`TranscriptionService`).
 
-## Transcripción
+## Transcript
 
-- La última transcripción se guarda en
+- The last transcript is saved to
   `~/Library/Application Support/LocalDictate/last-transcript.txt`
-  (`FileTranscriptStore`), con un pequeño debounce para no escribir a disco
-  en cada tecla presionada. Se restaura automáticamente al abrir la app.
-- `UserDefaults` solo se usa para preferencias chicas (por ejemplo, la ruta
-  del modelo instalado), nunca para el texto de la transcripción.
+  (`FileTranscriptStore`), with a small debounce so it doesn't write to disk
+  on every keystroke. It's restored automatically when the app opens.
+- `UserDefaults` is only used for small preferences (e.g. the installed
+  model's path), never for the transcript text.
 
-## Solución de problemas
+## Error handling
 
-### macOS pide permiso de micrófono repetidamente, en cada reinstalación
+- Errors are modeled as a typed `AppError` (`AppError.swift`), with a fixed
+  category (`microphonePermission`, `recording`, `transcription`, `model`,
+  `storage`, `clipboard`, `unknown`) plus a Spanish user-facing message.
+- The Spanish message is resolved in one place
+  (`AppErrorCategory.defaultMessage`, optionally overridden per error site),
+  so `DictationViewModel` doesn't inline error strings scattered across its
+  catch blocks.
+- Tests can assert on `AppError.category` instead of comparing message
+  strings.
 
-Causa raíz: sin un Team ID de firma estable, cada build recompilado tiene una
-identidad de firma distinta y TCC (el sistema de permisos de macOS) no puede
-asociar el permiso otorgado con la siguiente versión de la app. Se soluciona
-firmando con un Team ID fijo:
+## Troubleshooting
 
-1. En Xcode, seleccioná el proyecto `LocalDictate` (no el target) en el
-   Project Navigator, luego la pestaña **Signing & Capabilities** del target
-   `LocalDictate`.
-2. Activá "Automatically manage signing" y elegí tu Apple ID / Team.
-3. Confirmá que `project.yml` tiene `DEVELOPMENT_TEAM` con ese Team ID (podés
-   verlo también con `security find-identity -v -p codesigning`, o inspeccionando
-   un build ya firmado con `codesign -dvvv LocalDictate.app` — el campo
-   `TeamIdentifier` no debe decir `not set`).
+### macOS asks for microphone permission repeatedly, on every reinstall
 
-Lo que sí mantiene estable la identidad de la app frente a TCC (y por lo tanto
-evita el re-prompt) son tres cosas, todas ya fijas en este repo:
+Root cause: without a stable signing Team ID, every recompiled build has a
+different signing identity, and TCC (macOS's permission system) can't
+associate the granted permission with the next version of the app. Fixed by
+signing with a fixed Team ID:
 
-- **Bundle Identifier**: `com.localdictate.app`, fijo en `project.yml`
-  (`PRODUCT_BUNDLE_IDENTIFIER`), no se recalcula por build.
-- **Team ID / certificado de firma**: mientras exista un solo certificado
-  "Apple Development" válido en el keychain para ese Team (`security
-  find-identity -v -p codesigning` debería listar exactamente uno), Xcode
-  firma siempre igual. Si en algún momento aparece más de un certificado
-  válido, Xcode puede firmar con uno distinto entre builds y eso sí reinicia
-  el permiso.
-- **Ruta de build (DerivedData)**: no importa. TCC identifica a la app por su
-  firma de código (Team ID + Bundle ID), no por la ruta del binario, así que
-  builds sucesivos en `DerivedData` con hashes distintos no disparan un
-  nuevo prompt mientras la firma no cambie.
+1. In Xcode, select the `LocalDictate` project (not the target) in the
+   Project Navigator, then the **Signing & Capabilities** tab of the
+   `LocalDictate` target.
+2. Enable "Automatically manage signing" and pick your Apple ID / Team.
+3. Confirm `project.yml` has `DEVELOPMENT_TEAM` set to that Team ID (you can
+   also check it with `security find-identity -v -p codesigning`, or by
+   inspecting an already-signed build with `codesign -dvvv LocalDictate.app`
+   — the `TeamIdentifier` field shouldn't say `not set`).
 
-Lo único que sí fuerza un re-prompt aun con esto resuelto es un
-`tccutil reset Microphone` explícito, o revocar el certificado de desarrollo
-(por ejemplo, al reinstalar Xcode desde cero o cambiar de Apple ID).
+What actually keeps the app's identity stable for TCC (and therefore avoids
+the re-prompt) are three things, all already fixed in this repo:
 
-### No aparece el diálogo de permiso de micrófono, ni una entrada en Ajustes
+- **Bundle Identifier**: `com.localdictate.app`, fixed in `project.yml`
+  (`PRODUCT_BUNDLE_IDENTIFIER`), not recomputed per build.
+- **Team ID / signing certificate**: as long as there's a single valid
+  "Apple Development" certificate in the keychain for that Team (`security
+  find-identity -v -p codesigning` should list exactly one), Xcode always
+  signs the same way. If more than one valid certificate ever shows up,
+  Xcode may sign with a different one between builds, and that does reset
+  the permission.
+- **Build path (DerivedData)**: doesn't matter. TCC identifies the app by
+  its code signature (Team ID + Bundle ID), not by the binary's path, so
+  successive builds in `DerivedData` with different hashes don't trigger a
+  new prompt as long as the signature doesn't change.
 
-Causa raíz: con `ENABLE_HARDENED_RUNTIME: YES`, macOS exige un entitlement
-explícito para acceder a recursos protegidos como el micrófono
-(`com.apple.security.device.audio-input`), además del texto en
-`NSMicrophoneUsageDescription`. Sin ese entitlement, el diálogo de TCC nunca
-se llega a mostrar — ni se registra ningún intento en Ajustes — y en la
-consola puede verse algo como `NSViewBridgeErrorCanceled`. Se soluciona
-agregando el entitlement en `LocalDictate/LocalDictate.entitlements` (ya
-incluido en este repo) y apuntándolo desde `CODE_SIGN_ENTITLEMENTS` en
+The only thing that does force a re-prompt even with this resolved is an
+explicit `tccutil reset Microphone`, or revoking the development certificate
+(for example, when reinstalling Xcode from scratch or switching Apple IDs).
+
+### The microphone permission dialog never appears, not even an entry in Settings
+
+Root cause: with `ENABLE_HARDENED_RUNTIME: YES`, macOS requires an explicit
+entitlement to access protected resources like the microphone
+(`com.apple.security.device.audio-input`), in addition to the
+`NSMicrophoneUsageDescription` text. Without that entitlement, the TCC
+dialog never even shows up — no attempt is logged in Settings either — and
+the console may show something like `NSViewBridgeErrorCanceled`. Fixed by
+adding the entitlement in `LocalDictate/LocalDictate.entitlements` (already
+included in this repo) and pointing to it from `CODE_SIGN_ENTITLEMENTS` in
 `project.yml`.
 
-Si necesitás reintentar el flujo de permiso desde cero durante desarrollo:
+If you need to retry the permission flow from scratch during development:
 
 ```bash
 tccutil reset Microphone com.localdictate.app
 ```
 
-### Mensajes en consola como `ViewBridge ... NSViewBridgeErrorCanceled` o `Unable to obtain a task name port right`
+### Console messages like `ViewBridge ... NSViewBridgeErrorCanceled` or `Unable to obtain a task name port right`
 
-Son ruido benigno de macOS (el subsistema `RemoteViewService`/`ViewBridge`
-usado por paneles de sistema fuera de proceso, y el intento del debugger de
-adjuntarse a un proceso auxiliar efímero). El propio mensaje de Apple lo
-aclara: `benign unless unexpected`. Si la app funciona bien (grabación,
-permiso, transcripción), no indican un problema real.
+Benign macOS noise (the `RemoteViewService`/`ViewBridge` subsystem used by
+out-of-process system panels, and the debugger's attempt to attach to a
+short-lived helper process). Apple's own message says as much: `benign
+unless unexpected`. If the app works fine (recording, permission,
+transcription), these don't indicate a real problem.
 
-## Limitaciones conocidas
+## Known limitations
 
-- Solo español; no hay selector de idioma ni autodetección.
-- Sin ícono de app personalizado.
-- El manejo de errores es básico: los mensajes se muestran en texto, sin
-  reintentos automáticos más allá de dejar los botones disponibles para
-  volver a intentar.
-- Cada transcripción reemplaza a la anterior; no hay modo de agregar
-  (append) ni historial de transcripciones pasadas.
-- Cancelar una transcripción en curso es "soft": WhisperKit no expone una
-  forma de abortar la inferencia a mitad de camino, así que la app solo
-  garantiza descartar el resultado cuando llega, no detener el cálculo antes.
-- No hay selector de modelo: se usa siempre el mismo modelo de WhisperKit
-  fijado en `ModelManager`.
-- Sin atajo de teclado global, ícono en la barra de menú ni transcripción
-  en vivo mientras se grava (todo esto es a propósito: queda fuera de esta
-  versión y reservado para una futura).
+- Spanish only; no language selector or auto-detection.
+- No custom app icon.
+- Error handling is basic: messages are shown as text, with no automatic
+  retries beyond leaving the buttons available to try again.
+- Each transcription replaces the previous one; there's no append mode or
+  history of past transcriptions.
+- Cancelling an in-progress transcription is "soft": WhisperKit doesn't
+  expose a way to abort inference midway, so the app only guarantees
+  discarding the result once it arrives, not stopping the computation
+  earlier.
+- No model selector: it always uses the same WhisperKit model fixed in
+  `ModelManager`.
+- No global keyboard shortcut, menu bar icon, or live transcription while
+  recording (all of this is intentional: out of scope for this version and
+  reserved for a future one).
 
-## Próximos pasos (fuera de esta versión)
+## Next steps (out of scope for this version)
 
-Roadmap tentativo para después de MVP2, en orden de prioridad:
+Tentative roadmap for after MVP2, in priority order:
 
-- **MVP3** — Atajo de teclado global para grabar/detener sin enfocar la
-  ventana, y pegado automático del resultado en la app que estaba activa.
-- **MVP4** — Ícono en la barra de menú (menu bar extra) como forma
-  alternativa de uso, sin depender de la ventana principal.
-- **MVP5** — Transcripción en vivo mientras se graba, en lugar de esperar
-  a "Detener".
-- **MVP6** — Historial de transcripciones anteriores (hoy solo se persiste
-  la última).
-- **MVP7** — Selector de modelo (elegir entre variantes de Whisper según el
-  trade-off velocidad/precisión que prefiera cada usuario) y limpieza de
-  cara a una eventual distribución (ícono de app propio, etc.).
+- **MVP3** — Global keyboard shortcut to record/stop without focusing the
+  window, and automatic pasting of the result into whichever app was
+  active.
+- **MVP4** — Menu bar icon (menu bar extra) as an alternative way to use the
+  app, without depending on the main window.
+- **MVP5** — Live transcription while recording, instead of waiting for
+  "Detener".
+- **MVP6** — History of past transcriptions (today only the last one is
+  persisted).
+- **MVP7** — Model selector (choose between Whisper variants depending on
+  the speed/accuracy trade-off each user prefers) and cleanup ahead of
+  eventual distribution (custom app icon, etc.).
