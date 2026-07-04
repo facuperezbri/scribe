@@ -1,5 +1,34 @@
+# macOS
 .DS_Store
+
+# Xcode
 **/xcuserdata/
 *.xcuserstate
+*.moved-aside
+*.pbxuser
+*.perspectivev3
 DerivedData/
 build/
+*.xcarchive
+
+# Swift Package Manager
+.swiftpm/
+.build/
+
+# Downloaded ML models / caches (never committed; stored under Application Support)
+Models/
+*.mlmodelc
+*.mlpackage
+
+# Temporary audio recordings (stored in system temp dir, kept here as a safeguard)
+*.caf
+*.m4a
+*.wav
+Recordings/
+
+# Secrets
+.env
+.env.*
+*.pem
+*.p12
+Secrets/
