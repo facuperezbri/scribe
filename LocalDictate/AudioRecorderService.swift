@@ -11,8 +11,17 @@ enum AudioRecorderError: LocalizedError {
     }
 }
 
+protocol AudioRecordingServicing {
+    @discardableResult
+    func startRecording() throws -> URL
+    @discardableResult
+    func stopRecording() -> URL?
+    func deleteCurrentFile()
+    func currentLevel() -> Float
+}
+
 /// Grava audio del micrófono a un archivo local temporal.
-final class AudioRecorderService: NSObject {
+final class AudioRecorderService: NSObject, AudioRecordingServicing {
     private var recorder: AVAudioRecorder?
     private(set) var currentFileURL: URL?
 

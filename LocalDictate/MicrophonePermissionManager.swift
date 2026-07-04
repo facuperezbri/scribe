@@ -7,9 +7,14 @@ enum MicrophonePermissionStatus {
     case restricted
 }
 
+protocol MicrophonePermissionManaging {
+    func currentStatus() -> MicrophonePermissionStatus
+    func requestAccess() async -> Bool
+}
+
 /// Consulta y solicita el permiso de micrófono del sistema.
-enum MicrophonePermissionManager {
-    static func currentStatus() -> MicrophonePermissionStatus {
+final class MicrophonePermissionManager: MicrophonePermissionManaging {
+    func currentStatus() -> MicrophonePermissionStatus {
         switch AVCaptureDevice.authorizationStatus(for: .audio) {
         case .authorized:
             return .authorized
@@ -24,7 +29,7 @@ enum MicrophonePermissionManager {
         }
     }
 
-    static func requestAccess() async -> Bool {
+    func requestAccess() async -> Bool {
         await AVCaptureDevice.requestAccess(for: .audio)
     }
 }

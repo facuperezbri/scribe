@@ -42,8 +42,12 @@ final class DictationViewModel: ObservableObject {
     @Published var recordingElapsed: TimeInterval = 0
     @Published var inputLevel: Float = 0
 
-    private let audioRecorder = AudioRecorderService()
-    private let transcriptionService = TranscriptionService()
+    private let audioRecorder: AudioRecordingServicing
+    private let transcriptionService: TranscriptionServicing
+    private let modelManager: ModelManaging
+    private let microphonePermissionManager: MicrophonePermissionManaging
+    private let clipboardService: ClipboardServicing
+    private let transcriptStore: TranscriptStoring
     private(set) var lastRecordingURL: URL?
     private var meterTask: Task<Void, Never>?
     private var transcriptionTask: Task<Void, Never>?
@@ -56,13 +60,26 @@ final class DictationViewModel: ObservableObject {
     /// puede disparar dos grabaciones que se pisan entre sí.
     private var isStartingRecording = false
 
-    private static let transcriptDefaultsKey = "LocalDictate.lastTranscript"
     private static let restrictedMicrophoneMessage = "El acceso al micrófono está restringido en este equipo (gestión parental o de la organización). No se puede habilitar desde la app."
     private static let softWarningThreshold: TimeInterval = 120
     private static let strongWarningThreshold: TimeInterval = 300
 
-    init() {
-        if let saved = UserDefaults.standard.string(forKey: Self.transcriptDefaultsKey), !saved.isEmpty {
+    init(
+        audioRecorder: AudioRecordingServicing = AudioRecorderService(),
+        modelManager: ModelManaging = ModelManager(),
+        microphonePermissionManager: MicrophonePermissionManaging = MicrophonePermissionManager(),
+        clipboardService: ClipboardServicing = ClipboardService(),
+        transcriptStore: TranscriptStoring = UserDefaultsTranscriptStore(),
+        transcriptionService: TranscriptionServicing? = nil
+    ) {
+        self.audioRecorder = audioRecorder
+        self.modelManager = modelManager
+        self.microphonePermissionManager = microphonePermissionManager
+        self.clipboardService = clipboardService
+        self.transcriptStore = transcriptStore
+        self.transcriptionService = transcriptionService ?? TranscriptionService(modelManager: modelManager)
+
+        if let saved = transcriptStore.loadTranscript(), !saved.isEmpty {
             transcript = saved
         }
         state = currentSteadyState()
@@ -80,8 +97,8 @@ final class DictationViewModel: ObservableObject {
     /// Estado "en reposo" a partir solo del modelo instalado y el permiso de micrófono
     /// vigente, sin considerar si hay transcripción. Usado por `currentSteadyState()`.
     private func baseReadyState() -> AppState {
-        guard ModelManager.isModelInstalled else { return .missingModel }
-        switch MicrophonePermissionManager.currentStatus() {
+        guard modelManager.isModelInstalled else { return .missingModel }
+        switch microphonePermissionManager.currentStatus() {
         case .denied:
             return .microphonePermissionDenied
         case .restricted:
@@ -109,11 +126,7 @@ final class DictationViewModel: ObservableObject {
     }
 
     private func persistTranscript() {
-        if transcript.isEmpty {
-            UserDefaults.standard.removeObject(forKey: Self.transcriptDefaultsKey)
-        } else {
-            UserDefaults.standard.set(transcript, forKey: Self.transcriptDefaultsKey)
-        }
+        transcriptStore.saveTranscript(transcript)
     }
 
     var recordButtonTitle: String {
@@ -128,7 +141,7 @@ final class DictationViewModel: ObservableObject {
     }
 
     var isModelInstalled: Bool {
-        ModelManager.isModelInstalled
+        modelManager.isModelInstalled
     }
 
     var isError: Bool {
@@ -231,14 +244,14 @@ final class DictationViewModel: ObservableObject {
     }
 
     private func startRecordingFlow() async {
-        switch MicrophonePermissionManager.currentStatus() {
+        switch microphonePermissionManager.currentStatus() {
         case .authorized:
             beginRecording()
 
         case .notDetermined:
             state = .requestingPermission
             statusText = "Solicitando permiso de micrófono..."
-            let granted = await MicrophonePermissionManager.requestAccess()
+            let granted = await microphonePermissionManager.requestAccess()
             if granted {
                 beginRecording()
             } else {
@@ -288,7 +301,7 @@ final class DictationViewModel: ObservableObject {
         }
         lastRecordingURL = url
 
-        guard ModelManager.isModelInstalled else {
+        guard modelManager.isModelInstalled else {
             state = .missingModel
             statusText = "Modelo no instalado. Descargalo para transcribir tu grabación."
             return
@@ -365,7 +378,7 @@ final class DictationViewModel: ObservableObject {
         statusText = "Descargando modelo... 0%"
         Task {
             do {
-                _ = try await ModelManager.downloadModel { [weak self] fraction in
+                _ = try await modelManager.downloadModel { [weak self] fraction in
                     Task { @MainActor in
                         self?.downloadProgress = fraction
                         self?.statusText = "Descargando modelo... \(Int(fraction * 100))%"
@@ -386,12 +399,12 @@ final class DictationViewModel: ObservableObject {
     }
 
     func revealModelInFinder() {
-        ModelManager.revealInFinder()
+        modelManager.revealInFinder()
     }
 
     func copyTranscript() {
         guard !transcript.isEmpty else { return }
-        ClipboardService.copy(transcript)
+        clipboardService.copy(transcript)
         showCopiedFeedback = true
         Task {
             try? await Task.sleep(for: .seconds(1.5))

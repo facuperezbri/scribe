@@ -12,17 +12,27 @@ enum TranscriptionServiceError: LocalizedError {
     }
 }
 
+protocol TranscriptionServicing {
+    func transcribe(audioURL: URL) async throws -> String
+    func invalidate()
+}
+
 /// Envuelve WhisperKit para transcribir audio localmente. Todo el uso de WhisperKit
 /// queda aislado dentro de esta clase (y de ModelManager para la gestión del modelo).
-final class TranscriptionService {
+final class TranscriptionService: TranscriptionServicing {
+    private let modelManager: ModelManaging
     private var whisperKit: WhisperKit?
     private var loadedModelFolder: URL?
 
     // TODO(Fase 5+): permitir inglés o auto-detección desde una pantalla de configuración.
     private let language = "es"
 
+    init(modelManager: ModelManaging) {
+        self.modelManager = modelManager
+    }
+
     func transcribe(audioURL: URL) async throws -> String {
-        guard let modelFolder = ModelManager.installedModelFolder else {
+        guard let modelFolder = modelManager.installedModelFolder else {
             throw TranscriptionServiceError.modelNotInstalled
         }
 

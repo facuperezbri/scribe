@@ -18,12 +18,15 @@
 		74D0B185E8966D0961750C63 /* TranscriptionService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 93FEC38C157FD0ED3488D751 /* TranscriptionService.swift */; };
 		7F77362EFD0D82B2C0E2B830 /* RecordingFeedbackView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09C68E4BF4642F244E8A44CC /* RecordingFeedbackView.swift */; };
 		84EE8C49F3719213C9892AF7 /* TranscriptEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4BC8611AE9D0F2C6025AD1AA /* TranscriptEditorView.swift */; };
+		A1456280D3D3738FE2F8DCFB /* TestDoubles.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20F44A94450B859FC915339A /* TestDoubles.swift */; };
 		B20C9768CAA5CFBBE5E354A9 /* ModelManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = AC0D292F4B7C89D8CF51A2B7 /* ModelManager.swift */; };
 		BB55A6322988C507E1ADEF05 /* MicrophonePermissionManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 37E263B7B594EA1F93C0A305 /* MicrophonePermissionManager.swift */; };
+		C5C051021886AD5400BD36CA /* DictationViewModelDependencyInjectionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF1EAAD8C6EBDD4E6E5F8A46 /* DictationViewModelDependencyInjectionTests.swift */; };
 		C92798B238F5225990239786 /* StatusBadgeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CE5F204E4C9AE66208E3D8EA /* StatusBadgeView.swift */; };
 		CE419DA6FD2774595C3C1FE1 /* DictationViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = FED3C5EE86577C2050A95313 /* DictationViewModel.swift */; };
 		D232A8FFA582D9C53FF1E9AE /* DictationViewModelPresentationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AFBD4941A270A23DB2E8304D /* DictationViewModelPresentationTests.swift */; };
 		E146011F210292C05D42E4C5 /* TranscribingFeedbackView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 06BB826B0E54121CEED448CF /* TranscribingFeedbackView.swift */; };
+		E87B230A592DA2792F81D49F /* TranscriptStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = CAEDDFA31837DDA301287C02 /* TranscriptStore.swift */; };
 		F02797E8E86EA0409A46DD07 /* WhisperKit in Frameworks */ = {isa = PBXBuildFile; productRef = 4B0AA3A3DD168D5E181A378D /* WhisperKit */; };
 /* End PBXBuildFile section */
 
@@ -45,6 +48,7 @@
 		0C4DA36840A172AFCCFB97B7 /* SmokeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SmokeTests.swift; sourceTree = "<group>"; };
 		140ABFEC4B5E9E54451BC572 /* AudioRecorderService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioRecorderService.swift; sourceTree = "<group>"; };
 		1F2E2B9A53E3BA95998B855C /* LocalDictateTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = LocalDictateTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		20F44A94450B859FC915339A /* TestDoubles.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TestDoubles.swift; sourceTree = "<group>"; };
 		37E263B7B594EA1F93C0A305 /* MicrophonePermissionManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MicrophonePermissionManager.swift; sourceTree = "<group>"; };
 		4714AEAAD189B89EE59D8F0F /* LocalDictateApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalDictateApp.swift; sourceTree = "<group>"; };
 		4BC8611AE9D0F2C6025AD1AA /* TranscriptEditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TranscriptEditorView.swift; sourceTree = "<group>"; };
@@ -55,7 +59,9 @@
 		B41215445F5A53ED364FA474 /* PrivacyNoteView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PrivacyNoteView.swift; sourceTree = "<group>"; };
 		BB0D80CF21D1F7AF2BC4D8F8 /* RecordingButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecordingButton.swift; sourceTree = "<group>"; };
 		C3478B2823CB669F4F1B541C /* LocalDictate.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = LocalDictate.entitlements; sourceTree = "<group>"; };
+		CAEDDFA31837DDA301287C02 /* TranscriptStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TranscriptStore.swift; sourceTree = "<group>"; };
 		CE5F204E4C9AE66208E3D8EA /* StatusBadgeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatusBadgeView.swift; sourceTree = "<group>"; };
+		CF1EAAD8C6EBDD4E6E5F8A46 /* DictationViewModelDependencyInjectionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DictationViewModelDependencyInjectionTests.swift; sourceTree = "<group>"; };
 		E10BFA4ECD12238B6FB8BBD4 /* LocalDictate.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = LocalDictate.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		FED3C5EE86577C2050A95313 /* DictationViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DictationViewModel.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -75,8 +81,10 @@
 		1DABB3A51E2A705EFB54E861 /* LocalDictateTests */ = {
 			isa = PBXGroup;
 			children = (
+				CF1EAAD8C6EBDD4E6E5F8A46 /* DictationViewModelDependencyInjectionTests.swift */,
 				AFBD4941A270A23DB2E8304D /* DictationViewModelPresentationTests.swift */,
 				0C4DA36840A172AFCCFB97B7 /* SmokeTests.swift */,
+				20F44A94450B859FC915339A /* TestDoubles.swift */,
 			);
 			path = LocalDictateTests;
 			sourceTree = "<group>";
@@ -109,6 +117,7 @@
 				06BB826B0E54121CEED448CF /* TranscribingFeedbackView.swift */,
 				4BC8611AE9D0F2C6025AD1AA /* TranscriptEditorView.swift */,
 				93FEC38C157FD0ED3488D751 /* TranscriptionService.swift */,
+				CAEDDFA31837DDA301287C02 /* TranscriptStore.swift */,
 			);
 			path = LocalDictate;
 			sourceTree = "<group>";
@@ -209,8 +218,10 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				C5C051021886AD5400BD36CA /* DictationViewModelDependencyInjectionTests.swift in Sources */,
 				D232A8FFA582D9C53FF1E9AE /* DictationViewModelPresentationTests.swift in Sources */,
 				03D4448D491EB175F6DBAE7B /* SmokeTests.swift in Sources */,
+				A1456280D3D3738FE2F8DCFB /* TestDoubles.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -232,6 +243,7 @@
 				C92798B238F5225990239786 /* StatusBadgeView.swift in Sources */,
 				E146011F210292C05D42E4C5 /* TranscribingFeedbackView.swift in Sources */,
 				84EE8C49F3719213C9892AF7 /* TranscriptEditorView.swift in Sources */,
+				E87B230A592DA2792F81D49F /* TranscriptStore.swift in Sources */,
 				74D0B185E8966D0961750C63 /* TranscriptionService.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
