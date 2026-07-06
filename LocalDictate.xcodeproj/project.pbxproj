@@ -10,6 +10,7 @@
 		025853BF893577C760477C99 /* AudioRecorderService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 140ABFEC4B5E9E54451BC572 /* AudioRecorderService.swift */; };
 		03D4448D491EB175F6DBAE7B /* SmokeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0C4DA36840A172AFCCFB97B7 /* SmokeTests.swift */; };
 		0A81075954B4DA20693DACA3 /* AppErrorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 055FAF05C94B1D466A4E0CFD /* AppErrorTests.swift */; };
+		0C6D90DFDABE774F834D8DF4 /* DictationViewModelWorkflowTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6F852175925DFF4C77CCDCE8 /* DictationViewModelWorkflowTests.swift */; };
 		3FA1C658FC750B1A3C4B53B4 /* FileTranscriptStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E8289CCE9E94E2963BAEE1F /* FileTranscriptStoreTests.swift */; };
 		4059F80230CA4D1E926537CC /* RecordingButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0D80CF21D1F7AF2BC4D8F8 /* RecordingButton.swift */; };
 		42585D09432D62E93E29C746 /* PrivacyNoteView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B41215445F5A53ED364FA474 /* PrivacyNoteView.swift */; };
@@ -58,6 +59,7 @@
 		4714AEAAD189B89EE59D8F0F /* LocalDictateApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalDictateApp.swift; sourceTree = "<group>"; };
 		4BC8611AE9D0F2C6025AD1AA /* TranscriptEditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TranscriptEditorView.swift; sourceTree = "<group>"; };
 		542C32418CADFA8188C3CA80 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
+		6F852175925DFF4C77CCDCE8 /* DictationViewModelWorkflowTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DictationViewModelWorkflowTests.swift; sourceTree = "<group>"; };
 		8E8289CCE9E94E2963BAEE1F /* FileTranscriptStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FileTranscriptStoreTests.swift; sourceTree = "<group>"; };
 		8FA35B0C90C7979117FA4A60 /* AppError.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppError.swift; sourceTree = "<group>"; };
 		93FEC38C157FD0ED3488D751 /* TranscriptionService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TranscriptionService.swift; sourceTree = "<group>"; };
@@ -93,6 +95,7 @@
 				CF1EAAD8C6EBDD4E6E5F8A46 /* DictationViewModelDependencyInjectionTests.swift */,
 				AFBD4941A270A23DB2E8304D /* DictationViewModelPresentationTests.swift */,
 				C3F7D0F80C4AF5B242CF679B /* DictationViewModelStateModelTests.swift */,
+				6F852175925DFF4C77CCDCE8 /* DictationViewModelWorkflowTests.swift */,
 				8E8289CCE9E94E2963BAEE1F /* FileTranscriptStoreTests.swift */,
 				0C4DA36840A172AFCCFB97B7 /* SmokeTests.swift */,
 				20F44A94450B859FC915339A /* TestDoubles.swift */,
@@ -234,6 +237,7 @@
 				C5C051021886AD5400BD36CA /* DictationViewModelDependencyInjectionTests.swift in Sources */,
 				D232A8FFA582D9C53FF1E9AE /* DictationViewModelPresentationTests.swift in Sources */,
 				47AAF64B9A4947FEB785F709 /* DictationViewModelStateModelTests.swift in Sources */,
+				0C6D90DFDABE774F834D8DF4 /* DictationViewModelWorkflowTests.swift in Sources */,
 				3FA1C658FC750B1A3C4B53B4 /* FileTranscriptStoreTests.swift in Sources */,
 				03D4448D491EB175F6DBAE7B /* SmokeTests.swift in Sources */,
 				A1456280D3D3738FE2F8DCFB /* TestDoubles.swift in Sources */,
