@@ -112,6 +112,12 @@ final class DictationViewModel: ObservableObject {
         }
         state = steadyState()
         statusText = statusText(for: state)
+
+        self.audioRecorder.setInterruptionHandler { [weak self] error in
+            Task { @MainActor in
+                self?.handleRecordingInterruption(error)
+            }
+        }
     }
 
     /// Estado "en reposo" real a partir del modelo instalado y el permiso de micrófono
@@ -391,6 +397,24 @@ final class DictationViewModel: ObservableObject {
         meterTask?.cancel()
         meterTask = nil
         inputLevel = 0
+    }
+
+    /// Se dispara cuando `audioRecorder` reporta que la grabación terminó por sí sola (otra
+    /// app tomó el dispositivo de audio, o un error de codificación) sin que el usuario la
+    /// haya detenido. Solo tiene efecto si todavía estábamos en `.recording`: si el usuario ya
+    /// detuvo la grabación por su cuenta, este callback puede llegar tarde y no debe pisar el
+    /// estado que ya se actualizó.
+    private func handleRecordingInterruption(_ error: Error?) {
+        guard state.session == .recording else { return }
+        stopMetering()
+        let appError = AppError(
+            category: .recording,
+            message: "La grabación se interrumpió. Probá grabar de nuevo.",
+            underlying: error
+        )
+        state.session = .idle
+        state.error = appError
+        statusText = appError.message
     }
 
     private func transcribe(url: URL) async {

@@ -25,6 +25,7 @@
 		84EE8C49F3719213C9892AF7 /* TranscriptEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4BC8611AE9D0F2C6025AD1AA /* TranscriptEditorView.swift */; };
 		A1456280D3D3738FE2F8DCFB /* TestDoubles.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20F44A94450B859FC915339A /* TestDoubles.swift */; };
 		B20C9768CAA5CFBBE5E354A9 /* ModelManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = AC0D292F4B7C89D8CF51A2B7 /* ModelManager.swift */; };
+		B859649B54F7393EDC7267D1 /* DictationViewModelInterruptionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DDC1E093D2C7D509128141EE /* DictationViewModelInterruptionTests.swift */; };
 		BB55A6322988C507E1ADEF05 /* MicrophonePermissionManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 37E263B7B594EA1F93C0A305 /* MicrophonePermissionManager.swift */; };
 		C5C051021886AD5400BD36CA /* DictationViewModelDependencyInjectionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF1EAAD8C6EBDD4E6E5F8A46 /* DictationViewModelDependencyInjectionTests.swift */; };
 		C92798B238F5225990239786 /* StatusBadgeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CE5F204E4C9AE66208E3D8EA /* StatusBadgeView.swift */; };
@@ -72,6 +73,7 @@
 		CAEDDFA31837DDA301287C02 /* TranscriptStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TranscriptStore.swift; sourceTree = "<group>"; };
 		CE5F204E4C9AE66208E3D8EA /* StatusBadgeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatusBadgeView.swift; sourceTree = "<group>"; };
 		CF1EAAD8C6EBDD4E6E5F8A46 /* DictationViewModelDependencyInjectionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DictationViewModelDependencyInjectionTests.swift; sourceTree = "<group>"; };
+		DDC1E093D2C7D509128141EE /* DictationViewModelInterruptionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DictationViewModelInterruptionTests.swift; sourceTree = "<group>"; };
 		E10BFA4ECD12238B6FB8BBD4 /* LocalDictate.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = LocalDictate.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		FED3C5EE86577C2050A95313 /* DictationViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DictationViewModel.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -93,6 +95,7 @@
 			children = (
 				055FAF05C94B1D466A4E0CFD /* AppErrorTests.swift */,
 				CF1EAAD8C6EBDD4E6E5F8A46 /* DictationViewModelDependencyInjectionTests.swift */,
+				DDC1E093D2C7D509128141EE /* DictationViewModelInterruptionTests.swift */,
 				AFBD4941A270A23DB2E8304D /* DictationViewModelPresentationTests.swift */,
 				C3F7D0F80C4AF5B242CF679B /* DictationViewModelStateModelTests.swift */,
 				6F852175925DFF4C77CCDCE8 /* DictationViewModelWorkflowTests.swift */,
@@ -235,6 +238,7 @@
 			files = (
 				0A81075954B4DA20693DACA3 /* AppErrorTests.swift in Sources */,
 				C5C051021886AD5400BD36CA /* DictationViewModelDependencyInjectionTests.swift in Sources */,
+				B859649B54F7393EDC7267D1 /* DictationViewModelInterruptionTests.swift in Sources */,
 				D232A8FFA582D9C53FF1E9AE /* DictationViewModelPresentationTests.swift in Sources */,
 				47AAF64B9A4947FEB785F709 /* DictationViewModelStateModelTests.swift in Sources */,
 				0C6D90DFDABE774F834D8DF4 /* DictationViewModelWorkflowTests.swift in Sources */,

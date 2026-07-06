@@ -11,6 +11,7 @@ final class FakeAudioRecordingService: AudioRecordingServicing {
     private(set) var startRecordingCallCount = 0
     private(set) var stopRecordingCallCount = 0
     private(set) var deleteCurrentFileCallCount = 0
+    private var interruptionHandler: ((Error?) -> Void)?
 
     func startRecording() throws -> URL {
         startRecordingCallCount += 1
@@ -28,6 +29,16 @@ final class FakeAudioRecordingService: AudioRecordingServicing {
 
     func currentLevel() -> Float {
         level
+    }
+
+    func setInterruptionHandler(_ handler: @escaping (Error?) -> Void) {
+        interruptionHandler = handler
+    }
+
+    /// Simula que `AVAudioRecorderDelegate` reportó una interrupción, sin depender de
+    /// hardware de audio real.
+    func simulateInterruption(error: Error? = nil) {
+        interruptionHandler?(error)
     }
 }
 
