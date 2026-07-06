@@ -104,6 +104,35 @@ Direct use of WhisperKit is confined to `ModelManager` and
 `TranscriptionService`; the rest of the app doesn't know about that
 dependency.
 
+### State model
+
+`DictationViewModel` keeps a single `AppState` with four independent
+dimensions instead of one flat "current mode" enum:
+
+- `permission: MicrophonePermissionStatus` — microphone access.
+- `model: ModelState` — `.missing` / `.downloading(progress:)` / `.installed`.
+- `session: DictationSessionState` — `.idle`, `.requestingPermission`,
+  `.startingRecording`, `.recording`, `.stoppingRecording`, `.transcribing`.
+- `error: AppError?` — the last error, if any, independent of the other
+  three (e.g. the model can be missing while an unrelated clipboard error
+  is still showing).
+
+Every record/stop action, regardless of where it comes from, goes through
+a single entry point:
+`handlePrimaryDictationAction(source: DictationActionSource = .userInterface)`.
+It checks `isBusy` and `pendingConfirmation` before doing anything, so
+rapid repeated calls (double-clicking the button, or in the future a
+hotkey held down) can't start two recordings or transcribe twice.
+`DictationActionSource` exists so a future caller (MVP3's global hotkey)
+identifies itself without duplicating the logic above — see "MVP3
+readiness" below.
+
+Replacing or clearing a non-empty transcript is a destructive action, so
+`handlePrimaryDictationAction`/`clearTranscript` don't do it directly:
+they set `pendingConfirmation` (`.replaceTranscript` / `.clearTranscript`),
+which `ContentView` renders as a confirmation alert, and only
+`confirmPendingAction()`/`cancelPendingConfirmation()` resolve it.
+
 ## Model
 
 - Variant: `large-v3-v20240930_626MB` (repo `argmaxinc/whisperkit-coreml`).
@@ -130,6 +159,12 @@ dependency.
   catch blocks.
 - Tests can assert on `AppError.category` instead of comparing message
   strings.
+- `AudioRecorderService` implements `AVAudioRecorderDelegate` to detect
+  when a recording stops on its own (another app taking the audio device,
+  or an encoding error) instead of via `stopRecording()`. That interruption
+  surfaces as a `.recording`-category `AppError` and moves `session` back
+  to `.idle`, so the UI doesn't keep showing "Recording..." after audio
+  has actually stopped.
 
 ## Troubleshooting
 
@@ -212,6 +247,37 @@ transcription), these don't indicate a real problem.
 - No global keyboard shortcut, menu bar icon, or live transcription while
   recording (all of this is intentional: out of scope for this version and
   reserved for a future one).
+
+## MVP3 readiness
+
+MVP2.5 exists to make the global-hotkey work in MVP3 safe to add without
+restructuring the app again. Concretely:
+
+- The hotkey handler should call
+  `DictationViewModel.handlePrimaryDictationAction(source: .globalHotkey)` —
+  the same method the record/stop button already calls with
+  `source: .userInterface` — instead of re-implementing start/stop/transcribe
+  logic. This is what keeps the hotkey and the UI from getting out of sync
+  (e.g. the hotkey starting a second recording while one is already running,
+  or bypassing the replace/clear-transcript confirmation).
+- State lives in one place (`AppState`, see "State model" above), so the
+  hotkey doesn't need its own state machine; it reads and mutates the exact
+  state the UI reads and mutates.
+
+Remaining risks to resolve before wiring up the actual shortcut:
+
+- `pendingConfirmation` (replace/clear transcript) is currently resolved
+  through a SwiftUI alert bound to the main window. What a hotkey should do
+  when it fires while that alert is pending — queue the action, ignore it,
+  or bring the window forward — hasn't been decided yet.
+- A global hotkey usually implies the app can act without its window being
+  frontmost (or open at all). Permission prompts (`NSWorkspace`,
+  microphone access) and the confirmation alerts above have only been
+  exercised with the main window focused; their behavior when the app is
+  backgrounded or windowless is untested.
+- Audio interruption handling (see "Error handling") reverts to `.idle` and
+  sets a typed error, but there's no menu bar icon or notification yet to
+  surface that to a user who triggered the whole flow via keyboard only.
 
 ## Next steps (out of scope for this version)
 
