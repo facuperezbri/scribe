@@ -21,13 +21,13 @@ struct ContentView: View {
             StatusBadgeView(text: viewModel.statusText, kind: viewModel.statusKind)
 
             RecordingButton(
-                isRecording: viewModel.state == .recording,
+                isRecording: viewModel.isRecording,
                 isBusy: viewModel.isBusy,
                 title: viewModel.recordButtonTitle,
-                action: viewModel.toggleRecording
+                action: { viewModel.handlePrimaryDictationAction() }
             )
 
-            if viewModel.state == .recording {
+            if viewModel.isRecording {
                 RecordingFeedbackView(
                     elapsed: viewModel.recordingElapsed,
                     inputLevel: viewModel.inputLevel,
@@ -36,11 +36,11 @@ struct ContentView: View {
                 )
             }
 
-            if viewModel.state == .transcribing {
+            if viewModel.isTranscribing {
                 TranscribingFeedbackView(onCancel: viewModel.cancelTranscription)
             }
 
-            if viewModel.state == .microphonePermissionDenied {
+            if viewModel.isMicrophonePermissionDenied {
                 Button("Abrir Ajustes del Sistema", action: viewModel.openMicrophonePrivacySettings)
                     .buttonStyle(.bordered)
                     .controlSize(.small)
@@ -65,7 +65,7 @@ struct ContentView: View {
                     isInstalled: viewModel.isModelInstalled,
                     modelName: ModelManager.modelDisplayName,
                     sizeDescription: ModelManager.modelSizeDescription,
-                    isDownloading: viewModel.state == .downloadingModel,
+                    isDownloading: viewModel.isDownloadingModel,
                     downloadProgress: viewModel.downloadProgress,
                     onReveal: viewModel.revealModelInFinder,
                     onDownload: viewModel.downloadModel

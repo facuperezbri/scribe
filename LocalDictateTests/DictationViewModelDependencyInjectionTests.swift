@@ -32,17 +32,20 @@ final class DictationViewModelDependencyInjectionTests: XCTestCase {
 
     func testReadyStateWhenModelInstalledAndPermissionAuthorized() {
         let (viewModel, _, _, _, _) = makeViewModel(modelInstalled: true, permissionStatus: .authorized)
-        XCTAssertEqual(viewModel.state, .ready)
+        XCTAssertEqual(viewModel.state.session, .idle)
+        XCTAssertEqual(viewModel.state.model, .installed)
+        XCTAssertNil(viewModel.state.error)
     }
 
     func testMissingModelStateWhenModelNotInstalled() {
         let (viewModel, _, _, _, _) = makeViewModel(modelInstalled: false, permissionStatus: .authorized)
-        XCTAssertEqual(viewModel.state, .missingModel)
+        XCTAssertEqual(viewModel.state.model, .missing)
     }
 
     func testMicrophoneDeniedStateWhenPermissionDenied() {
         let (viewModel, _, _, _, _) = makeViewModel(modelInstalled: true, permissionStatus: .denied)
-        XCTAssertEqual(viewModel.state, .microphonePermissionDenied)
+        XCTAssertEqual(viewModel.state.permission, .denied)
+        XCTAssertTrue(viewModel.isError)
     }
 
     func testCopyTranscriptUsesInjectedClipboardService() {

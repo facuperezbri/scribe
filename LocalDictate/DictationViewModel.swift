@@ -1,18 +1,35 @@
 import AppKit
 import Foundation
 
-/// Estados posibles de la app.
-enum AppState: Equatable {
+/// Estado del modelo de WhisperKit en disco.
+enum ModelState: Equatable {
+    case missing
+    case downloading(progress: Double)
+    case installed
+}
+
+/// Fase de la sesión de dictado en curso. Reemplaza los flags booleanos ad hoc
+/// (`isStartingRecording`, `isTranscriptionCancelled`) que antes representaban estas
+/// transiciones de forma implícita: cada paso del flujo grabar → transcribir es ahora un
+/// caso explícito, y `handlePrimaryDictationAction` decide qué hacer solo mirando el caso
+/// actual, sin estado oculto adicional.
+enum DictationSessionState: Equatable {
+    case idle
     case requestingPermission
-    case microphonePermissionDenied
-    case ready
+    case startingRecording
     case recording
     case stoppingRecording
     case transcribing
-    case transcriptReady
-    case missingModel
-    case downloadingModel
-    case error(AppError)
+}
+
+/// Estado completo de la app, separado en dimensiones independientes (permiso de micrófono,
+/// modelo, sesión de dictado, error) en vez de un único enum plano que mezclaba las cuatro
+/// cosas en un solo caso por vez.
+struct AppState: Equatable {
+    var permission: MicrophonePermissionStatus
+    var model: ModelState
+    var session: DictationSessionState
+    var error: AppError?
 }
 
 /// Categoría visual de un `AppState`, para que la vista elija color sin conocer los casos puntuales.
@@ -29,14 +46,21 @@ enum PendingConfirmation: Equatable {
     case clearTranscript
 }
 
+/// Origen de una acción de grabar/detener. Hoy solo existe `.userInterface`; `.globalHotkey`
+/// queda reservado para cuando MVP3 agregue el atajo global, que deberá invocar
+/// `handlePrimaryDictationAction(source: .globalHotkey)` en vez de duplicar esta lógica.
+enum DictationActionSource: Equatable {
+    case userInterface
+    case globalHotkey
+}
+
 @MainActor
 final class DictationViewModel: ObservableObject {
-    @Published var state: AppState = .ready
-    @Published var statusText: String = "Listo"
+    @Published var state: AppState
+    @Published var statusText: String
     @Published var transcript: String = "" {
         didSet { persistTranscript() }
     }
-    @Published var downloadProgress: Double = 0
     @Published var showCopiedFeedback = false
     @Published var pendingConfirmation: PendingConfirmation?
     @Published var recordingElapsed: TimeInterval = 0
@@ -52,14 +76,11 @@ final class DictationViewModel: ObservableObject {
     private var meterTask: Task<Void, Never>?
     private var transcriptionTask: Task<Void, Never>?
     private var pendingTranscriptSaveTask: Task<Void, Never>?
-    /// Autoritativo para descartar un resultado de transcripción que llega tarde tras
-    /// cancelar: `transcriptionTask?.cancel()` es solo un intento cooperativo (WhisperKit no
-    /// garantiza abortar la inferencia a mitad de camino), así que no alcanza por sí solo.
-    private var isTranscriptionCancelled = false
-    /// Cierra la ventana entre tocar "Grabar" (camino ya autorizado, sin estado intermedio
-    /// publicado) y que `beginRecording()` corra de verdad: sin esto, un doble clic muy rápido
-    /// puede disparar dos grabaciones que se pisan entre sí.
-    private var isStartingRecording = false
+    /// Identifica el intento de transcripción en curso, para descartar un resultado que
+    /// llega tarde (tras cancelar, o tras haber arrancado una grabación nueva) sin importar
+    /// qué caso tenga `state.session` en ese momento: comparar contra este id es la única
+    /// forma confiable de saber si un resultado async sigue siendo relevante.
+    private var currentTranscriptionAttempt: UUID?
 
     private static let restrictedMicrophoneError = AppError(
         category: .microphonePermission,
@@ -83,50 +104,44 @@ final class DictationViewModel: ObservableObject {
         self.transcriptStore = transcriptStore
         self.transcriptionService = transcriptionService ?? TranscriptionService(modelManager: modelManager)
 
+        state = AppState(permission: .notDetermined, model: .missing, session: .idle, error: nil)
+        statusText = "Listo"
+
         if let saved = transcriptStore.loadTranscript(), !saved.isEmpty {
             transcript = saved
         }
-        state = currentSteadyState()
-        statusText = statusText(forSteadyState: state)
+        state = steadyState()
+        statusText = statusText(for: state)
     }
 
-    /// Estado "en reposo" real para el contenido actual: como `baseReadyState()`, pero
-    /// además refleja si ya hay una transcripción para mostrar. Única fuente de verdad para
-    /// volver a un estado neutral (al iniciar la app, limpiar o cancelar una transcripción).
-    private func currentSteadyState() -> AppState {
-        let base = baseReadyState()
-        return (!transcript.isEmpty && base == .ready) ? .transcriptReady : base
-    }
-
-    /// Estado "en reposo" a partir solo del modelo instalado y el permiso de micrófono
-    /// vigente, sin considerar si hay transcripción. Usado por `currentSteadyState()`.
-    private func baseReadyState() -> AppState {
-        guard modelManager.isModelInstalled else { return .missingModel }
-        switch microphonePermissionManager.currentStatus() {
-        case .denied:
-            return .microphonePermissionDenied
-        case .restricted:
-            return .error(Self.restrictedMicrophoneError)
-        case .authorized, .notDetermined:
-            return .ready
+    /// Estado "en reposo" real a partir del modelo instalado y el permiso de micrófono
+    /// vigente, con `session` siempre en `.idle`. Única fuente de verdad para volver a un
+    /// estado neutral (al iniciar la app, limpiar o cancelar una transcripción).
+    private func steadyState() -> AppState {
+        let permission = microphonePermissionManager.currentStatus()
+        guard modelManager.isModelInstalled else {
+            return AppState(permission: permission, model: .missing, session: .idle, error: nil)
         }
+        if permission == .restricted {
+            return AppState(permission: permission, model: .installed, session: .idle, error: Self.restrictedMicrophoneError)
+        }
+        return AppState(permission: permission, model: .installed, session: .idle, error: nil)
     }
 
-    private func statusText(forSteadyState state: AppState) -> String {
-        switch state {
-        case .ready:
-            return "Listo"
-        case .transcriptReady:
-            return "Transcripción restaurada. Listo para grabar de nuevo."
-        case .missingModel:
+    private func statusText(for state: AppState) -> String {
+        if let error = state.error {
+            return error.message
+        }
+        if state.model == .missing {
             return "Modelo no instalado. Podés grabar, pero necesitás descargarlo para transcribir."
-        case .microphonePermissionDenied:
-            return "Micrófono bloqueado. Habilitalo en Ajustes del Sistema para poder grabar."
-        case .error(let appError):
-            return appError.message
-        default:
-            return "Listo"
         }
+        if state.permission == .denied {
+            return "Micrófono bloqueado. Habilitalo en Ajustes del Sistema para poder grabar."
+        }
+        if !transcript.isEmpty {
+            return "Transcripción restaurada. Listo para grabar de nuevo."
+        }
+        return "Listo"
     }
 
     /// Guarda la transcripción con un pequeño debounce para no escribir a disco en cada
@@ -142,7 +157,7 @@ final class DictationViewModel: ObservableObject {
     }
 
     var recordButtonTitle: String {
-        switch state {
+        switch state.session {
         case .recording:
             return "Detener"
         case .stoppingRecording:
@@ -156,31 +171,42 @@ final class DictationViewModel: ObservableObject {
         modelManager.isModelInstalled
     }
 
-    var isError: Bool {
-        switch state {
-        case .error, .microphonePermissionDenied:
-            return true
-        default:
-            return false
+    var downloadProgress: Double {
+        if case .downloading(let progress) = state.model {
+            return progress
         }
+        return 0
+    }
+
+    var isRecording: Bool { state.session == .recording }
+    var isTranscribing: Bool { state.session == .transcribing }
+    var isMicrophonePermissionDenied: Bool { state.permission == .denied }
+    var isDownloadingModel: Bool {
+        if case .downloading = state.model { return true }
+        return false
+    }
+
+    var isError: Bool {
+        state.error != nil || state.permission == .denied
     }
 
     var statusKind: StatusKind {
-        switch state {
-        case .ready, .transcriptReady:
-            return .neutral
-        case .recording, .stoppingRecording, .transcribing, .downloadingModel, .requestingPermission:
+        if isError { return .error }
+        switch state.session {
+        case .recording, .stoppingRecording, .transcribing, .requestingPermission, .startingRecording:
             return .active
-        case .missingModel:
-            return .warning
-        case .microphonePermissionDenied, .error:
-            return .error
+        case .idle:
+            break
         }
+        if isDownloadingModel { return .active }
+        if state.model == .missing { return .warning }
+        return .neutral
     }
 
     var isBusy: Bool {
-        switch state {
-        case .transcribing, .downloadingModel, .requestingPermission, .stoppingRecording:
+        if isDownloadingModel { return true }
+        switch state.session {
+        case .transcribing, .requestingPermission, .stoppingRecording:
             return true
         default:
             return false
@@ -190,7 +216,7 @@ final class DictationViewModel: ObservableObject {
     /// `nil` si la grabación todavía no es larga, o el aviso correspondiente al umbral
     /// alcanzado. Solo tiene sentido mientras se está grabando.
     var recordingWarningText: String? {
-        guard state == .recording else { return nil }
+        guard state.session == .recording else { return nil }
         if recordingElapsed >= Self.strongWarningThreshold {
             return "Grabación muy larga: se recomienda detener y transcribir ahora."
         }
@@ -201,25 +227,31 @@ final class DictationViewModel: ObservableObject {
     }
 
     var isStrongRecordingWarning: Bool {
-        state == .recording && recordingElapsed >= Self.strongWarningThreshold
+        state.session == .recording && recordingElapsed >= Self.strongWarningThreshold
     }
 
-    /// Punto único de entrada del botón Grabar/Detener. La guarda contra `isBusy` evita que
-    /// clics rápidos repetidos disparen una grabación o detención inválida mientras la app
-    /// está en un estado transitorio (deteniendo, transcribiendo, descargando, pidiendo permiso).
-    /// Si ya hay una transcripción, grabar de nuevo la reemplazaría en silencio: se pide
-    /// confirmación antes de arrancar.
-    func toggleRecording() {
+    /// Punto único de entrada para una acción de grabar/detener, sin importar de dónde venga:
+    /// hoy solo el botón de la UI, más adelante también el atajo de teclado global de MVP3
+    /// (pasando `source: .globalHotkey`). Ambos orígenes comparten exactamente esta lógica,
+    /// así que MVP3 no necesita duplicar el flujo de negocio, solo invocar esta función.
+    ///
+    /// La seguridad ante toques repetidos no depende de un flag aparte: `startRecordingIfPossible()`
+    /// deja `state.session` en `.startingRecording` de forma sincrónica antes de lanzar el
+    /// `Task`, así que una segunda invocación mientras arranca ve un `session` distinto de
+    /// `.idle` y cae en el `default` sin efecto.
+    func handlePrimaryDictationAction(source: DictationActionSource = .userInterface) {
         guard !isBusy, pendingConfirmation == nil else { return }
-        switch state {
+        switch state.session {
         case .recording:
             stopRecording()
-        default:
+        case .idle:
             if !transcript.isEmpty {
                 pendingConfirmation = .replaceTranscript
             } else {
                 startRecordingIfPossible()
             }
+        default:
+            break
         }
     }
 
@@ -237,22 +269,15 @@ final class DictationViewModel: ObservableObject {
         }
     }
 
-    /// Único punto de entrada real hacia `startRecordingFlow()`. La guarda contra
-    /// `isStartingRecording` cierra la ventana de carrera del camino ya autorizado: entre
-    /// tocar "Grabar" y que `beginRecording()` deje el estado en `.recording` no hay ningún
-    /// `AppState` publicado que bloquee un segundo toque, así que sin este flag un doble clic
-    /// muy rápido podía arrancar dos grabaciones que se pisan.
-    private func startRecordingIfPossible() {
-        guard !isStartingRecording else { return }
-        isStartingRecording = true
-        Task {
-            await startRecordingFlow()
-            isStartingRecording = false
-        }
-    }
-
     func cancelPendingConfirmation() {
         pendingConfirmation = nil
+    }
+
+    private func startRecordingIfPossible() {
+        state.session = .startingRecording
+        Task {
+            await startRecordingFlow()
+        }
     }
 
     private func startRecordingFlow() async {
@@ -261,22 +286,26 @@ final class DictationViewModel: ObservableObject {
             beginRecording()
 
         case .notDetermined:
-            state = .requestingPermission
+            state.session = .requestingPermission
             statusText = "Solicitando permiso de micrófono..."
             let granted = await microphonePermissionManager.requestAccess()
             if granted {
                 beginRecording()
             } else {
-                state = .microphonePermissionDenied
+                state.permission = .denied
+                state.session = .idle
                 statusText = "Permiso de micrófono denegado. Habilitalo en Ajustes del Sistema para poder grabar."
             }
 
         case .denied:
-            state = .microphonePermissionDenied
+            state.permission = .denied
+            state.session = .idle
             statusText = "Micrófono bloqueado. Habilitalo en Ajustes del Sistema para poder grabar."
 
         case .restricted:
-            state = .error(Self.restrictedMicrophoneError)
+            state.permission = .restricted
+            state.session = .idle
+            state.error = Self.restrictedMicrophoneError
         }
     }
 
@@ -290,12 +319,14 @@ final class DictationViewModel: ObservableObject {
         do {
             let fileURL = try audioRecorder.startRecording()
             lastRecordingURL = fileURL
-            state = .recording
+            state.session = .recording
+            state.error = nil
             statusText = "Grabando..."
             startMetering()
         } catch {
             let appError = AppError(category: .recording, underlying: error)
-            state = .error(appError)
+            state.session = .idle
+            state.error = appError
             statusText = appError.message
         }
     }
@@ -304,19 +335,22 @@ final class DictationViewModel: ObservableObject {
         // Estado transitorio fijado de forma sincrónica: bloquea un segundo tap antes de
         // que audioRecorder.stopRecording() termine, evitando una doble detención/transcripción.
         stopMetering()
-        state = .stoppingRecording
+        state.session = .stoppingRecording
         statusText = "Deteniendo grabación..."
 
         guard let url = audioRecorder.stopRecording() else {
             let appError = AppError(category: .recording, message: "No se encontró el audio grabado.")
-            state = .error(appError)
+            state.session = .idle
+            state.error = appError
             statusText = appError.message
             return
         }
         lastRecordingURL = url
+        state.error = nil
 
         guard modelManager.isModelInstalled else {
-            state = .missingModel
+            state.model = .missing
+            state.session = .idle
             statusText = "Modelo no instalado. Descargalo para transcribir tu grabación."
             return
         }
@@ -325,14 +359,14 @@ final class DictationViewModel: ObservableObject {
     }
 
     /// Cancela la transcripción en curso. `transcriptionTask?.cancel()` es solo una señal
-    /// cooperativa; el guard de `isTranscriptionCancelled` dentro de `transcribe(url:)` es lo
+    /// cooperativa; comparar `currentTranscriptionAttempt` dentro de `transcribe(url:)` es lo
     /// que realmente evita que un resultado que llega tarde sobrescriba el estado ya revertido.
     func cancelTranscription() {
-        guard state == .transcribing else { return }
-        isTranscriptionCancelled = true
+        guard state.session == .transcribing else { return }
+        currentTranscriptionAttempt = nil
         transcriptionTask?.cancel()
         transcriptionTask = nil
-        state = currentSteadyState()
+        state = steadyState()
         statusText = "Transcripción cancelada."
     }
 
@@ -360,25 +394,28 @@ final class DictationViewModel: ObservableObject {
     }
 
     private func transcribe(url: URL) async {
-        state = .transcribing
+        let attemptID = UUID()
+        currentTranscriptionAttempt = attemptID
+        state.session = .transcribing
         statusText = "Transcribiendo..."
-        isTranscriptionCancelled = false
         do {
             let text = try await transcriptionService.transcribe(audioURL: url)
-            guard !isTranscriptionCancelled else { return }
+            guard currentTranscriptionAttempt == attemptID else { return }
             // TODO(modo append, post-MVP2): hoy cada transcripción reemplaza la anterior;
             // en algún momento se podría agregar un modo que concatene en vez de sobrescribir.
             transcript = text
-            state = .transcriptReady
+            state.session = .idle
+            state.error = nil
             statusText = "Transcripción lista."
             // El audio ya cumplió su propósito: se borra para no dejar WAVs temporales
             // acumulándose en disco más allá de lo necesario.
             audioRecorder.deleteCurrentFile()
             lastRecordingURL = nil
         } catch {
-            guard !isTranscriptionCancelled else { return }
+            guard currentTranscriptionAttempt == attemptID else { return }
             let appError = AppError(category: .transcription, underlying: error)
-            state = .error(appError)
+            state.session = .idle
+            state.error = appError
             statusText = appError.message
         }
         transcriptionTask = nil
@@ -388,27 +425,28 @@ final class DictationViewModel: ObservableObject {
     /// Este es el único lugar de la app donde se dispara una descarga de red.
     func downloadModel() {
         guard !isBusy else { return }
-        state = .downloadingModel
-        downloadProgress = 0
+        state.model = .downloading(progress: 0)
         statusText = "Descargando modelo... 0%"
         Task {
             do {
                 _ = try await modelManager.downloadModel { [weak self] fraction in
                     Task { @MainActor in
-                        self?.downloadProgress = fraction
+                        self?.state.model = .downloading(progress: fraction)
                         self?.statusText = "Descargando modelo... \(Int(fraction * 100))%"
                     }
                 }
                 transcriptionService.invalidate()
+                state.model = .installed
+                state.error = nil
                 if let url = lastRecordingURL {
                     await transcribe(url: url)
                 } else {
-                    state = .ready
+                    state.session = .idle
                     statusText = "Modelo instalado. Listo."
                 }
             } catch {
                 let appError = AppError(category: .model, underlying: error)
-                state = .missingModel
+                state.model = .missing
                 statusText = appError.message
             }
         }
@@ -440,11 +478,11 @@ final class DictationViewModel: ObservableObject {
         pendingConfirmation = .clearTranscript
     }
 
-    /// Vacía la transcripción y recalcula el estado real (no asume `.ready`): si falta el
-    /// modelo o el micrófono está bloqueado, el estado debe seguir reflejando eso.
+    /// Vacía la transcripción y recalcula el estado real (no asume `.idle` sin más): si falta
+    /// el modelo o el micrófono está bloqueado, el estado debe seguir reflejando eso.
     private func performClear() {
         transcript = ""
-        state = currentSteadyState()
-        statusText = statusText(forSteadyState: state)
+        state = steadyState()
+        statusText = statusText(for: state)
     }
 }

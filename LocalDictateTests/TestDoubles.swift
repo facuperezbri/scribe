@@ -33,10 +33,16 @@ final class FakeAudioRecordingService: AudioRecordingServicing {
 
 final class FakeTranscriptionService: TranscriptionServicing {
     var transcribeResult: Result<String, Error> = .success("")
+    /// Simula una transcripción lenta, para tests que necesitan cancelar o arrancar una
+    /// grabación nueva mientras la anterior sigue "en vuelo".
+    var delayMilliseconds: UInt64 = 0
     private(set) var invalidateCallCount = 0
 
     func transcribe(audioURL: URL) async throws -> String {
-        try transcribeResult.get()
+        if delayMilliseconds > 0 {
+            try? await Task.sleep(for: .milliseconds(delayMilliseconds))
+        }
+        return try transcribeResult.get()
     }
 
     func invalidate() {

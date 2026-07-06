@@ -1,6 +1,6 @@
 import AVFoundation
 
-enum MicrophonePermissionStatus {
+enum MicrophonePermissionStatus: Equatable {
     case notDetermined
     case authorized
     case denied

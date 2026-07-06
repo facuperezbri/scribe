@@ -41,11 +41,11 @@ final class DictationViewModelErrorCategoryTests: XCTestCase {
             transcriptionService: FakeTranscriptionService()
         )
 
-        viewModel.toggleRecording()
+        viewModel.handlePrimaryDictationAction()
         try? await Task.sleep(for: .milliseconds(50))
 
-        guard case .error(let appError) = viewModel.state else {
-            return XCTFail("Se esperaba un estado .error")
+        guard let appError = viewModel.state.error else {
+            return XCTFail("Se esperaba un AppError en state.error")
         }
         XCTAssertEqual(appError.category, .recording)
     }
@@ -65,8 +65,8 @@ final class DictationViewModelErrorCategoryTests: XCTestCase {
             transcriptionService: FakeTranscriptionService()
         )
 
-        guard case .error(let appError) = viewModel.state else {
-            return XCTFail("Se esperaba un estado .error")
+        guard let appError = viewModel.state.error else {
+            return XCTFail("Se esperaba un AppError en state.error")
         }
         XCTAssertEqual(appError.category, .microphonePermission)
     }
