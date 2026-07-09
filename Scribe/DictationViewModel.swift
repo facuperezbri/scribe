@@ -122,10 +122,11 @@ final class DictationViewModel: ObservableObject {
             }
         }
 
-        // Fase 4 de MVP3: conecta el atajo global al mismo punto de entrada que usa el botón de
-        // la UI. `LiveGlobalHotkeyService` todavía no registra nada a nivel de sistema, así que
-        // este callback no se dispara hasta la Fase 5; queda listo para entonces sin duplicar
-        // lógica de grabar/detener.
+        // Conecta el atajo global (Option solo, Fase 5 de MVP3) al mismo punto de entrada que
+        // usa el botón de la UI, sin duplicar lógica de grabar/detener. `try?` porque el registro
+        // puede fallar sin permiso de Accesibilidad (ver `LiveGlobalHotkeyService`); eso no debe
+        // impedir que el resto de la app arranque, y el monitor queda instalado igual para cuando
+        // el permiso se otorgue.
         try? self.globalHotkeyService.start { [weak self] in
             self?.handlePrimaryDictationAction(source: .globalHotkey)
         }
