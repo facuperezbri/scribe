@@ -1,4 +1,4 @@
-# LocalDictate
+# Scribe
 
 macOS desktop app that records speech in Spanish and transcribes it fully
 on-device, using [WhisperKit](https://github.com/argmaxinc/argmax-oss-swift)
@@ -27,34 +27,34 @@ reads disk to check whether the model is already installed.
 
 ```bash
 xcodegen generate
-open LocalDictate.xcodeproj
+open Scribe.xcodeproj
 ```
 
-Then run the `LocalDictate` scheme from Xcode (⌘R).
+Then run the `Scribe` scheme from Xcode (⌘R).
 
 It can also be built from the terminal:
 
 ```bash
 xcodegen generate
-xcodebuild -project LocalDictate.xcodeproj -scheme LocalDictate \
+xcodebuild -project Scribe.xcodeproj -scheme Scribe \
   -configuration Debug -destination 'platform=macOS' build
 ```
 
 ## Running the tests
 
-The tests live in the `LocalDictateTests` target (unit tests, no UI tests).
+The tests live in the `ScribeTests` target (unit tests, no UI tests).
 They don't require a real microphone, a model download, or WhisperKit: they
 only exercise `DictationViewModel`'s pure logic by manipulating its state
 directly.
 
-From Xcode: ⌘U with the `LocalDictate` scheme (the tests are wired into its
+From Xcode: ⌘U with the `Scribe` scheme (the tests are wired into its
 test action).
 
 From the terminal:
 
 ```bash
 xcodegen generate
-xcodebuild -project LocalDictate.xcodeproj -scheme LocalDictate \
+xcodebuild -project Scribe.xcodeproj -scheme Scribe \
   -configuration Debug -destination 'platform=macOS' test
 ```
 
@@ -83,7 +83,7 @@ xcodebuild -project LocalDictate.xcodeproj -scheme LocalDictate \
 
 | File | Responsibility |
 |---|---|
-| `LocalDictateApp.swift` | App entry point (`WindowGroup`). |
+| `ScribeApp.swift` | App entry point (`WindowGroup`). |
 | `ContentView.swift` | Main SwiftUI layout and confirmation dialogs. |
 | `DictationViewModel.swift` | App state and orchestration between services. |
 | `RecordingButton.swift` | Main Record/Stop button. |
@@ -136,7 +136,10 @@ which `ContentView` renders as a confirmation alert, and only
 ## Model
 
 - Variant: `large-v3-v20240930_626MB` (repo `argmaxinc/whisperkit-coreml`).
-- Stored under `~/Library/Application Support/LocalDictate/Models`.
+- Stored under `~/Library/Application Support/LocalDictate/Models`. This
+  path still says `LocalDictate` for now — the storage-path rename and
+  migration to `Application Support/Scribe` is scoped to a later phase, so
+  existing downloaded models aren't silently orphaned.
 - Transcription language is fixed to Spanish (`TranscriptionService`).
 
 ## Transcript
@@ -145,6 +148,8 @@ which `ContentView` renders as a confirmation alert, and only
   `~/Library/Application Support/LocalDictate/last-transcript.txt`
   (`FileTranscriptStore`), with a small debounce so it doesn't write to disk
   on every keystroke. It's restored automatically when the app opens.
+  Same note as above: this path is migrated to `Application Support/Scribe`
+  in a later phase, preserving the existing file.
 - `UserDefaults` is only used for small preferences (e.g. the installed
   model's path), never for the transcript text.
 
@@ -175,20 +180,24 @@ different signing identity, and TCC (macOS's permission system) can't
 associate the granted permission with the next version of the app. Fixed by
 signing with a fixed Team ID:
 
-1. In Xcode, select the `LocalDictate` project (not the target) in the
+1. In Xcode, select the `Scribe` project (not the target) in the
    Project Navigator, then the **Signing & Capabilities** tab of the
-   `LocalDictate` target.
+   `Scribe` target.
 2. Enable "Automatically manage signing" and pick your Apple ID / Team.
 3. Confirm `project.yml` has `DEVELOPMENT_TEAM` set to that Team ID (you can
    also check it with `security find-identity -v -p codesigning`, or by
-   inspecting an already-signed build with `codesign -dvvv LocalDictate.app`
+   inspecting an already-signed build with `codesign -dvvv Scribe.app`
    — the `TeamIdentifier` field shouldn't say `not set`).
 
 What actually keeps the app's identity stable for TCC (and therefore avoids
 the re-prompt) are three things, all already fixed in this repo:
 
 - **Bundle Identifier**: `com.localdictate.app`, fixed in `project.yml`
-  (`PRODUCT_BUNDLE_IDENTIFIER`), not recomputed per build.
+  (`PRODUCT_BUNDLE_IDENTIFIER`), not recomputed per build. This stayed
+  unchanged through the LocalDictate → Scribe rename on purpose: TCC keys
+  the microphone grant off the Bundle Identifier, not the display name or
+  module name, so changing it would have reset everyone's microphone
+  permission for no functional benefit.
 - **Team ID / signing certificate**: as long as there's a single valid
   "Apple Development" certificate in the keychain for that Team (`security
   find-identity -v -p codesigning` should list exactly one), Xcode always
@@ -212,7 +221,7 @@ entitlement to access protected resources like the microphone
 `NSMicrophoneUsageDescription` text. Without that entitlement, the TCC
 dialog never even shows up — no attempt is logged in Settings either — and
 the console may show something like `NSViewBridgeErrorCanceled`. Fixed by
-adding the entitlement in `LocalDictate/LocalDictate.entitlements` (already
+adding the entitlement in `Scribe/Scribe.entitlements` (already
 included in this repo) and pointing to it from `CODE_SIGN_ENTITLEMENTS` in
 `project.yml`.
 

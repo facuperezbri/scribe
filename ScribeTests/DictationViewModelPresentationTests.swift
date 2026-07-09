@@ -1,5 +1,5 @@
 import XCTest
-@testable import LocalDictate
+@testable import Scribe
 
 /// Cubre la lógica de presentación pura de `DictationViewModel` (funciones de `state` y
 /// `recordingElapsed` sin dependencias externas), no el flujo de grabación/transcripción real.

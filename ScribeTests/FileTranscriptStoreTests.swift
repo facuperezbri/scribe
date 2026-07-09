@@ -1,5 +1,5 @@
 import XCTest
-@testable import LocalDictate
+@testable import Scribe
 
 final class FileTranscriptStoreTests: XCTestCase {
     private var fileURL: URL!
@@ -7,7 +7,7 @@ final class FileTranscriptStoreTests: XCTestCase {
     override func setUp() {
         super.setUp()
         fileURL = FileManager.default.temporaryDirectory
-            .appendingPathComponent("LocalDictateTests-\(UUID().uuidString)", isDirectory: true)
+            .appendingPathComponent("ScribeTests-\(UUID().uuidString)", isDirectory: true)
             .appendingPathComponent("last-transcript.txt")
     }
 

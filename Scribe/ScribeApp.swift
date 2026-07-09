@@ -1,7 +1,7 @@
 import SwiftUI
 
 @main
-struct LocalDictateApp: App {
+struct ScribeApp: App {
     var body: some Scene {
         WindowGroup {
             ContentView()

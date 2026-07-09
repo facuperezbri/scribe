@@ -1,5 +1,5 @@
 import XCTest
-@testable import LocalDictate
+@testable import Scribe
 
 /// Cubre las garantías nuevas del modelo de estado dimensional: un único punto de entrada
 /// (`handlePrimaryDictationAction`) que sirve tanto para la UI como para un origen futuro

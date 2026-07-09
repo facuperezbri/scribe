@@ -1,5 +1,5 @@
 import XCTest
-@testable import LocalDictate
+@testable import Scribe
 
 /// Cubre la Fase 8: una interrupción de grabación reportada por `AudioRecordingServicing`
 /// (delegate de AVAudioRecorder en la implementación real) se convierte en un `AppError`

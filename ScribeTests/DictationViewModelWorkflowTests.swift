@@ -1,5 +1,5 @@
 import XCTest
-@testable import LocalDictate
+@testable import Scribe
 
 /// Cubre los flujos completos de la Fase 7: acciones bloqueadas mientras el view model está
 /// ocupado, las dos confirmaciones destructivas (reemplazar o limpiar una transcripción no

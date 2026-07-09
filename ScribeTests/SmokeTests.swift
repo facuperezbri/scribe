@@ -1,5 +1,5 @@
 import XCTest
-@testable import LocalDictate
+@testable import Scribe
 
 final class SmokeTests: XCTestCase {
     func testTestTargetRuns() {

@@ -1,5 +1,5 @@
 import XCTest
-@testable import LocalDictate
+@testable import Scribe
 
 /// Confirma que `DictationViewModel` puede construirse enteramente con fakes: sin
 /// micrófono real, sin WhisperKit, sin descargas de modelo y sin portapapeles real.

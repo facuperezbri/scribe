@@ -1,5 +1,5 @@
 import Foundation
-@testable import LocalDictate
+@testable import Scribe
 
 /// Fakes livianos de los servicios inyectables, para usar en tests sin tocar
 /// micrófono real, WhisperKit, descargas de red ni el portapapeles del sistema.

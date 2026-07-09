@@ -9,7 +9,7 @@ struct ContentView: View {
                 HStack(spacing: 6) {
                     Image(systemName: "waveform")
                         .foregroundStyle(Color.accentColor)
-                    Text("LocalDictate")
+                    Text("Scribe")
                         .font(.title2)
                         .fontWeight(.bold)
                 }
