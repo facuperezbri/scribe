@@ -288,6 +288,19 @@ transcription), these don't indicate a real problem.
 MVP2.5 exists to make the global-hotkey work in MVP3 safe to add without
 restructuring the app again. Concretely:
 
+- `GlobalHotkeyServicing` (`Scribe/GlobalHotkeyService.swift`) is the
+  protocol a hotkey service must implement: `start(onHotkeyPressed:)` and
+  `stop()`, nothing else. It only reports "the hotkey fired" — it has no
+  opinion on what recording should do. `DictationViewModel` takes one as an
+  injectable dependency (default `LiveGlobalHotkeyService()`, matching the
+  pattern used for every other service) and wires its callback straight to
+  `handlePrimaryDictationAction(source: .globalHotkey)` in `init`.
+  `LiveGlobalHotkeyService` is currently a skeleton: `start` stores the
+  callback but does not register anything with the OS yet. Registering
+  Control+Option+Space (via `NSEvent.addGlobalMonitorForEvents` or a Carbon
+  event tap) and calling the callback on the main actor is the one piece
+  left for the next phase — everything downstream of "hotkey fired" already
+  works and is covered by `ScribeTests/GlobalHotkeyServiceTests.swift`.
 - The hotkey handler should call
   `DictationViewModel.handlePrimaryDictationAction(source: .globalHotkey)` —
   the same method the record/stop button already calls with

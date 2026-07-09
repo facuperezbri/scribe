@@ -109,3 +109,27 @@ final class FakeTranscriptStore: TranscriptStoring {
         storedTranscript = text
     }
 }
+
+final class FakeGlobalHotkeyService: GlobalHotkeyServicing {
+    var startResult: Result<Void, Error> = .success(())
+    private(set) var startCallCount = 0
+    private(set) var stopCallCount = 0
+    private var onHotkeyPressed: (@MainActor () -> Void)?
+
+    func start(onHotkeyPressed: @escaping @MainActor () -> Void) throws {
+        startCallCount += 1
+        self.onHotkeyPressed = onHotkeyPressed
+        try startResult.get()
+    }
+
+    func stop() {
+        stopCallCount += 1
+        onHotkeyPressed = nil
+    }
+
+    /// Simula que el atajo global se detectó, sin depender de un event tap real.
+    @MainActor
+    func simulateHotkeyPressed() {
+        onHotkeyPressed?()
+    }
+}

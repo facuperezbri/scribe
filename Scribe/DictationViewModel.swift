@@ -72,6 +72,7 @@ final class DictationViewModel: ObservableObject {
     private let microphonePermissionManager: MicrophonePermissionManaging
     private let clipboardService: ClipboardServicing
     private let transcriptStore: TranscriptStoring
+    private let globalHotkeyService: GlobalHotkeyServicing
     private(set) var lastRecordingURL: URL?
     private var meterTask: Task<Void, Never>?
     private var transcriptionTask: Task<Void, Never>?
@@ -95,6 +96,7 @@ final class DictationViewModel: ObservableObject {
         microphonePermissionManager: MicrophonePermissionManaging = MicrophonePermissionManager(),
         clipboardService: ClipboardServicing = ClipboardService(),
         transcriptStore: TranscriptStoring = FileTranscriptStore(),
+        globalHotkeyService: GlobalHotkeyServicing = LiveGlobalHotkeyService(),
         transcriptionService: TranscriptionServicing? = nil
     ) {
         self.audioRecorder = audioRecorder
@@ -102,6 +104,7 @@ final class DictationViewModel: ObservableObject {
         self.microphonePermissionManager = microphonePermissionManager
         self.clipboardService = clipboardService
         self.transcriptStore = transcriptStore
+        self.globalHotkeyService = globalHotkeyService
         self.transcriptionService = transcriptionService ?? TranscriptionService(modelManager: modelManager)
 
         state = AppState(permission: .notDetermined, model: .missing, session: .idle, error: nil)
@@ -117,6 +120,14 @@ final class DictationViewModel: ObservableObject {
             Task { @MainActor in
                 self?.handleRecordingInterruption(error)
             }
+        }
+
+        // Fase 4 de MVP3: conecta el atajo global al mismo punto de entrada que usa el botón de
+        // la UI. `LiveGlobalHotkeyService` todavía no registra nada a nivel de sistema, así que
+        // este callback no se dispara hasta la Fase 5; queda listo para entonces sin duplicar
+        // lógica de grabar/detener.
+        try? self.globalHotkeyService.start { [weak self] in
+            self?.handlePrimaryDictationAction(source: .globalHotkey)
         }
     }
 
