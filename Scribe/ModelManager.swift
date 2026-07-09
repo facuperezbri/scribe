@@ -22,16 +22,35 @@ final class ModelManager: ModelManaging {
     static let modelSizeDescription = "~626 MB"
     static let modelDisplayName = "Whisper large-v3"
 
-    private static let modelFolderDefaultsKey = "LocalDictate.modelFolderPath"
+    private static let modelFolderDefaultsKey = "Scribe.modelFolderPath"
+    private static let legacyModelFolderDefaultsKey = "LocalDictate.modelFolderPath"
 
-    private var modelsDirectory: URL {
-        let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-        return appSupport.appendingPathComponent("LocalDictate/Models", isDirectory: true)
+    private let userDefaults: UserDefaults
+    private let modelsDirectory: URL
+
+    /// El modelo (~626 MB) nunca se copia entre carpetas: copiarlo o moverlo sería un riesgo
+    /// innecesario para un archivo tan grande. En cambio, esta clase sigue leyendo desde donde
+    /// sea que esté instalado (potencialmente bajo `LocalDictate/Models`, si se descargó con una
+    /// versión anterior) y solo las descargas nuevas van a `modelsDirectory` (por defecto,
+    /// `Scribe/Models`). La única migración es la de la entry de `UserDefaults` que guarda esa
+    /// ruta, para que quede con el branding actual sin tocar el archivo en disco.
+    init(userDefaults: UserDefaults = .standard, modelsDirectory: URL = StoragePaths.currentModelsDirectory) {
+        self.userDefaults = userDefaults
+        self.modelsDirectory = modelsDirectory
+        Self.migrateModelFolderDefaultsKeyIfNeeded(userDefaults: userDefaults)
     }
 
-    /// Carpeta local del modelo ya descargado, si todavía existe en disco.
+    private static func migrateModelFolderDefaultsKeyIfNeeded(userDefaults: UserDefaults) {
+        guard userDefaults.string(forKey: modelFolderDefaultsKey) == nil else { return }
+        guard let legacyPath = userDefaults.string(forKey: legacyModelFolderDefaultsKey) else { return }
+        userDefaults.set(legacyPath, forKey: modelFolderDefaultsKey)
+    }
+
+    /// Carpeta local del modelo ya descargado, si todavía existe en disco. Puede estar bajo la
+    /// carpeta legacy (`LocalDictate/Models`) o la actual (`Scribe/Models`); no importa, porque
+    /// la ruta completa quedó guardada en `UserDefaults` al momento de la descarga.
     var installedModelFolder: URL? {
-        guard let path = UserDefaults.standard.string(forKey: Self.modelFolderDefaultsKey) else { return nil }
+        guard let path = userDefaults.string(forKey: Self.modelFolderDefaultsKey) else { return nil }
         var isDirectory: ObjCBool = false
         guard FileManager.default.fileExists(atPath: path, isDirectory: &isDirectory), isDirectory.boolValue else {
             return nil
@@ -56,7 +75,7 @@ final class ModelManager: ModelManaging {
             }
         )
 
-        UserDefaults.standard.set(folder.path, forKey: Self.modelFolderDefaultsKey)
+        userDefaults.set(folder.path, forKey: Self.modelFolderDefaultsKey)
         return folder
     }
 

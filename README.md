@@ -136,22 +136,48 @@ which `ContentView` renders as a confirmation alert, and only
 ## Model
 
 - Variant: `large-v3-v20240930_626MB` (repo `argmaxinc/whisperkit-coreml`).
-- Stored under `~/Library/Application Support/LocalDictate/Models`. This
-  path still says `LocalDictate` for now — the storage-path rename and
-  migration to `Application Support/Scribe` is scoped to a later phase, so
-  existing downloaded models aren't silently orphaned.
+- New downloads go to `~/Library/Application Support/Scribe/Models`
+  (`StoragePaths.currentModelsDirectory`).
+- If the model was already downloaded by a previous version of the app
+  (under `~/Library/Application Support/LocalDictate/Models`), it is **read
+  in place, not copied or moved**. Copying a ~626 MB file on every launch
+  just to rename its parent folder isn't worth the disk churn and I/O risk,
+  so `ModelManager` keeps whatever path is recorded in `UserDefaults`
+  (`Scribe.modelFolderPath`, migrated from the legacy
+  `LocalDictate.modelFolderPath` key the first time the app runs
+  post-upgrade) and only ever writes *new* downloads under the current
+  `Scribe` folder. Legacy model files are never deleted.
 - Transcription language is fixed to Spanish (`TranscriptionService`).
 
 ## Transcript
 
 - The last transcript is saved to
-  `~/Library/Application Support/LocalDictate/last-transcript.txt`
+  `~/Library/Application Support/Scribe/last-transcript.txt`
   (`FileTranscriptStore`), with a small debounce so it doesn't write to disk
   on every keystroke. It's restored automatically when the app opens.
-  Same note as above: this path is migrated to `Application Support/Scribe`
-  in a later phase, preserving the existing file.
+- If that file doesn't exist yet but a legacy one does
+  (`~/Library/Application Support/LocalDictate/last-transcript.txt`, from a
+  previous version of the app), it is **copied** (not moved) to the new
+  path once, so it keeps working exactly like a normal transcript from then
+  on. The legacy file is never deleted. If both exist, the current
+  (`Scribe`) transcript always wins.
 - `UserDefaults` is only used for small preferences (e.g. the installed
   model's path), never for the transcript text.
+
+## Storage migration (LocalDictate → Scribe)
+
+- The visible app name is Scribe; the Bundle Identifier intentionally
+  remains `com.localdictate.app` (see "Troubleshooting" below for why).
+- All storage-path constants live in `StoragePaths.swift`.
+- Existing `LocalDictate` data on disk is never deleted:
+  - The transcript file is copied to the new `Scribe` path the first time
+    the app runs without a current-path file, but the original stays put.
+  - The downloaded model is read from wherever it already is (no copy); only
+    new downloads land under the `Scribe` folder.
+- Small `UserDefaults` keys (e.g. the installed model's folder path) are
+  migrated from their `LocalDictate.*` name to a `Scribe.*` name the first
+  time they're read; this only renames the preference entry, it never
+  touches files on disk.
 
 ## Error handling
 

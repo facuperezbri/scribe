@@ -12,23 +12,33 @@ final class FileTranscriptStore: TranscriptStoring {
 
     private let fileURL: URL
 
-    init(fileURL: URL) {
+    /// `legacyFileURL`, si se provee y el archivo actual todavía no existe, se copia (nunca
+    /// se mueve ni se borra) al path actual. Así el archivo `LocalDictate` original queda
+    /// intacto y la transcripción actual (`Scribe`) siempre gana si ya existe.
+    init(fileURL: URL, legacyFileURL: URL? = nil) {
         self.fileURL = fileURL
         try? FileManager.default.createDirectory(
             at: fileURL.deletingLastPathComponent(),
             withIntermediateDirectories: true
         )
+        if let legacyFileURL {
+            Self.migrateLegacyFileIfNeeded(from: legacyFileURL, to: fileURL)
+        }
     }
 
     convenience init() {
-        let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-        let directory = appSupport.appendingPathComponent("LocalDictate", isDirectory: true)
-        self.init(fileURL: directory.appendingPathComponent("last-transcript.txt"))
+        self.init(fileURL: StoragePaths.currentTranscriptFile, legacyFileURL: StoragePaths.legacyTranscriptFile)
         migrateFromUserDefaultsIfNeeded()
     }
 
+    private static func migrateLegacyFileIfNeeded(from legacyURL: URL, to currentURL: URL) {
+        guard !FileManager.default.fileExists(atPath: currentURL.path) else { return }
+        guard FileManager.default.fileExists(atPath: legacyURL.path) else { return }
+        try? FileManager.default.copyItem(at: legacyURL, to: currentURL)
+    }
+
     /// Migra una transcripción guardada por una versión anterior de la app (que usaba
-    /// `UserDefaults`) al nuevo archivo, una sola vez.
+    /// `UserDefaults`, antes incluso de existir un archivo legacy) al nuevo archivo, una sola vez.
     private func migrateFromUserDefaultsIfNeeded() {
         guard !FileManager.default.fileExists(atPath: fileURL.path) else { return }
         guard let legacy = UserDefaults.standard.string(forKey: Self.legacyUserDefaultsKey), !legacy.isEmpty else { return }
