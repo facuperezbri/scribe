@@ -216,4 +216,105 @@ final class GlobalHotkeyServiceTests: XCTestCase {
         XCTAssertEqual(audioRecorder.startRecordingCallCount, 1)
         XCTAssertEqual(viewModel.state.session, .recording)
     }
+
+    // MARK: - Fase 6: estado del atajo y permiso de Accesibilidad
+
+    func testHotkeyStatusReflectsActiveAfterInit() {
+        let hotkeyService = FakeGlobalHotkeyService()
+        hotkeyService.statusResult = .active
+        let viewModel = makeViewModel(hotkeyService: hotkeyService)
+
+        XCTAssertEqual(viewModel.hotkeyStatus, .active)
+    }
+
+    /// El registro sigue instalando el monitor (Fase 5) y solo el `AXIsProcessTrusted` falla;
+    /// eso no debe impedir que la app arranque ni tumbar `init`.
+    func testHotkeyStatusReflectsAccessibilityPermissionRequiredAfterInit() {
+        let hotkeyService = FakeGlobalHotkeyService()
+        hotkeyService.startResult = .failure(GlobalHotkeyServiceError.accessibilityPermissionDenied)
+        hotkeyService.statusResult = .accessibilityPermissionRequired
+        let viewModel = makeViewModel(hotkeyService: hotkeyService)
+
+        XCTAssertEqual(viewModel.hotkeyStatus, .accessibilityPermissionRequired)
+    }
+
+    /// Una falla de registro no relacionada con Accesibilidad tampoco es fatal: el botón de la UI
+    /// sigue grabando con normalidad.
+    func testNonFatalRegistrationFailureDoesNotPreventNormalUse() async {
+        let hotkeyService = FakeGlobalHotkeyService()
+        hotkeyService.startResult = .failure(GlobalHotkeyServiceError.registrationFailed)
+        hotkeyService.statusResult = .failed("No se pudo registrar el atajo de teclado global.")
+        let audioRecorder = FakeAudioRecordingService()
+        let viewModel = makeViewModel(hotkeyService: hotkeyService, audioRecorder: audioRecorder)
+
+        XCTAssertEqual(viewModel.hotkeyStatus, .failed("No se pudo registrar el atajo de teclado global."))
+
+        viewModel.handlePrimaryDictationAction(source: .userInterface)
+        try? await Task.sleep(for: .milliseconds(50))
+
+        XCTAssertEqual(audioRecorder.startRecordingCallCount, 1)
+        XCTAssertEqual(viewModel.state.session, .recording)
+    }
+
+    /// Simula que el usuario otorgó el permiso de Accesibilidad después de que la app arrancó:
+    /// `refreshHotkeyStatus()` debe reflejarlo sin reiniciar el servicio.
+    func testRefreshHotkeyStatusUpdatesAfterPermissionGrantedLater() {
+        let hotkeyService = FakeGlobalHotkeyService()
+        hotkeyService.startResult = .failure(GlobalHotkeyServiceError.accessibilityPermissionDenied)
+        hotkeyService.statusResult = .accessibilityPermissionRequired
+        let viewModel = makeViewModel(hotkeyService: hotkeyService)
+        XCTAssertEqual(viewModel.hotkeyStatus, .accessibilityPermissionRequired)
+
+        hotkeyService.statusResult = .active
+        viewModel.refreshHotkeyStatus()
+
+        XCTAssertEqual(viewModel.hotkeyStatus, .active)
+    }
+
+    /// El fake sigue disparando el flujo centralizado sin importar el estado reportado por
+    /// `currentStatus()` — esa distinción es solo para la UI, no cambia el cableado del atajo.
+    func testGlobalHotkeyStillUsesCentralizedWorkflowWhenAccessibilityPermissionIsRequired() async {
+        let hotkeyService = FakeGlobalHotkeyService()
+        hotkeyService.statusResult = .accessibilityPermissionRequired
+        let audioRecorder = FakeAudioRecordingService()
+        let viewModel = makeViewModel(hotkeyService: hotkeyService, audioRecorder: audioRecorder)
+
+        hotkeyService.simulateHotkeyPressed()
+        try? await Task.sleep(for: .milliseconds(50))
+
+        XCTAssertEqual(audioRecorder.startRecordingCallCount, 1)
+        XCTAssertEqual(viewModel.state.session, .recording)
+    }
+
+    /// `LiveGlobalHotkeyService.currentStatus()` antes de `start` no depende de Accesibilidad:
+    /// no hay callback ni monitor instalado todavía, así que siempre es `.unknown`.
+    func testLiveServiceStatusIsUnknownBeforeStart() {
+        let service = LiveGlobalHotkeyService()
+        XCTAssertEqual(service.currentStatus(), .unknown)
+    }
+
+    /// Después de `start`, el estado real depende del permiso de Accesibilidad de esta máquina
+    /// (no controlable en CI), así que solo se verifica que deje de ser `.unknown`/`.failed` —
+    /// sin asumir si el proceso está o no confiado.
+    func testLiveServiceStatusIsActiveOrPermissionRequiredAfterStart() {
+        let service = LiveGlobalHotkeyService()
+        try? service.start {}
+
+        switch service.currentStatus() {
+        case .active, .accessibilityPermissionRequired:
+            break
+        case .unknown, .failed:
+            XCTFail("Se esperaba .active o .accessibilityPermissionRequired después de start, se obtuvo \(service.currentStatus())")
+        }
+    }
+
+    /// `stop()` vuelve a dejar el estado en `.unknown`, igual que antes de llamar a `start`.
+    func testLiveServiceStatusReturnsToUnknownAfterStop() {
+        let service = LiveGlobalHotkeyService()
+        try? service.start {}
+
+        service.stop()
+
+        XCTAssertEqual(service.currentStatus(), .unknown)
+    }
 }

@@ -19,6 +19,22 @@ enum GlobalHotkeyServiceError: LocalizedError {
     }
 }
 
+/// Estado observable del atajo global, para que la UI (Fase 6 de MVP3) pueda explicarle al
+/// usuario por qué Option no anda sin conocer nada de `NSEvent`/`AXIsProcessTrusted` por debajo.
+enum HotkeyStatus: Equatable {
+    /// Todavía no se llamó a `start`, o se llamó a `stop` después.
+    case unknown
+    /// El monitor está instalado y la app tiene permiso de Accesibilidad: Option dispara el atajo.
+    case active
+    /// El monitor está instalado pero falta el permiso de Accesibilidad, así que no le llegan
+    /// eventos todavía. Se resuelve solo (sin reiniciar la app) apenas el usuario otorga el
+    /// permiso; `currentStatus()` lo refleja la próxima vez que se consulta.
+    case accessibilityPermissionRequired
+    /// Falló el registro por otro motivo (no relacionado con Accesibilidad). Mensaje en español
+    /// listo para mostrar.
+    case failed(String)
+}
+
 /// Contrato mínimo para un servicio de atajo de teclado global: solo notifica que el atajo se
 /// presionó, sin conocer qué debe pasar después. `DictationViewModel.handlePrimaryDictationAction`
 /// sigue siendo el único lugar que decide qué hacer (grabar o detener), así que esta capa no
@@ -31,6 +47,10 @@ protocol GlobalHotkeyServicing {
     func start(onHotkeyPressed: @escaping @MainActor () -> Void) throws
     /// Detiene el servicio y libera cualquier registro a nivel de sistema.
     func stop()
+    /// Estado actual, recalculado en cada llamada (nunca cacheado): permite que la UI se
+    /// actualice sola cuando el usuario vuelve de otorgar el permiso de Accesibilidad, sin
+    /// reiniciar el servicio ni la app.
+    func currentStatus() -> HotkeyStatus
 }
 
 /// Implementación real de `GlobalHotkeyServicing`: detecta la tecla Option sola (sin ningún otro
@@ -58,9 +78,9 @@ protocol GlobalHotkeyServicing {
 /// requerir reiniciar la app) y usa `AXIsProcessTrusted()` (sin mostrar el diálogo nativo, para no
 /// pedir permiso fuera de este flujo) únicamente para decidir si lanza
 /// `GlobalHotkeyServiceError.accessibilityPermissionDenied` y para dejarlo en
-/// `lastRegistrationError`. Esta fase no agrega UI para ese error — `DictationViewModel` sigue
-/// llamando `start` con `try?`, así que el throw no rompe nada, solo queda registrado — el mensaje
-/// en español ya está listo en `errorDescription` para cuando la Fase 8 lo conecte a la interfaz.
+/// `lastRegistrationError`. `DictationViewModel` sigue llamando `start` con `try?`, así que el
+/// throw no rompe nada más que arranque la app; `currentStatus()` (Fase 6 de MVP3) es la vía por
+/// la que la UI se entera de ese estado y lo vuelve a consultar sin reiniciar el servicio.
 ///
 /// ## Limitaciones conocidas
 /// - Si el usuario suelta un modificador extra (p. ej. Cmd) mientras Option sigue presionado, esa
@@ -76,19 +96,31 @@ final class LiveGlobalHotkeyService: GlobalHotkeyServicing {
     private var onHotkeyPressed: (@MainActor () -> Void)?
     private var monitor: Any?
     private var lastRelevantFlags: NSEvent.ModifierFlags = []
+    /// `true` desde que `start` se llama por primera vez hasta el siguiente `stop`. Distingue
+    /// "todavía no arrancó" (`.unknown`) de "arrancó, pero sin permiso de Accesibilidad todavía"
+    /// (`.accessibilityPermissionRequired`) en `currentStatus()`.
+    private var hasStarted = false
 
     /// Último error de registro conocido. No forma parte de `GlobalHotkeyServicing`: es una
-    /// forma de que un caller que sepa que tiene un `LiveGlobalHotkeyService` (p. ej. UI futura
-    /// de Fase 8) pueda inspeccionar el estado sin que el protocolo cargue con ese detalle.
+    /// forma de que un caller que sepa que tiene un `LiveGlobalHotkeyService` pueda inspeccionar
+    /// el estado sin que el protocolo cargue con ese detalle. `currentStatus()` es la vía
+    /// recomendada para la UI.
     private(set) var lastRegistrationError: GlobalHotkeyServiceError?
 
     func start(onHotkeyPressed: @escaping @MainActor () -> Void) throws {
         self.onHotkeyPressed = onHotkeyPressed
         lastRelevantFlags = []
         lastRegistrationError = nil
+        hasStarted = true
 
         monitor = NSEvent.addGlobalMonitorForEvents(matching: .flagsChanged) { [weak self] event in
             self?.handleFlagsChanged(event)
+        }
+
+        guard monitor != nil else {
+            let error = GlobalHotkeyServiceError.registrationFailed
+            lastRegistrationError = error
+            throw error
         }
 
         guard AXIsProcessTrusted() else {
@@ -105,6 +137,19 @@ final class LiveGlobalHotkeyService: GlobalHotkeyServicing {
         monitor = nil
         onHotkeyPressed = nil
         lastRelevantFlags = []
+        hasStarted = false
+    }
+
+    /// Recalculado en cada llamada: no depende de `lastRegistrationError`, que solo refleja lo
+    /// que pasó en el último `start`. Así, si el usuario otorga el permiso de Accesibilidad
+    /// después de que la app arrancó, la próxima consulta (p. ej. al volver de Ajustes del
+    /// Sistema) ve `.active` sin reiniciar el monitor.
+    func currentStatus() -> HotkeyStatus {
+        guard hasStarted else { return .unknown }
+        guard monitor != nil else {
+            return .failed(GlobalHotkeyServiceError.registrationFailed.errorDescription ?? GlobalHotkeyServiceError.registrationFailed.localizedDescription)
+        }
+        return AXIsProcessTrusted() ? .active : .accessibilityPermissionRequired
     }
 
     /// Dispara el callback solo en la transición hacia "Option solo presionado", nunca mientras

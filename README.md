@@ -78,6 +78,31 @@ xcodebuild -project Scribe.xcodeproj -scheme Scribe \
    existing transcript asks for confirmation before replacing or deleting it.
 5. Once the model is installed, "Ver en Finder" opens the folder where it
    lives on disk.
+6. Pressing Option alone (with no other key) anywhere in macOS — not just
+   with Scribe's window focused — starts recording; pressing Option again
+   stops it and starts transcription, exactly as if the "Grabar"/"Detener"
+   button had been pressed. Holding Option down doesn't repeat-trigger it.
+
+### Global Option shortcut and Accessibility permission
+
+The Option shortcut is implemented with a global event monitor
+(`NSEvent.addGlobalMonitorForEvents`), which macOS only delivers events to if
+the app has been granted the **Accessibility** permission (Ajustes del
+Sistema → Privacidad y seguridad → Accesibilidad). Scribe never shows the
+native Accessibility prompt itself (`AXIsProcessTrustedWithOptions` is not
+used) — it only checks silently with `AXIsProcessTrusted()` and reflects the
+result in the UI, so granting the permission is always the user's explicit
+choice from System Settings, not something the app pushes on launch.
+
+If that permission hasn't been granted yet, pressing Option does nothing,
+and Scribe shows a small status message next to the model status
+explaining why ("Para usar Option desde cualquier app, Scribe necesita
+permiso de Accesibilidad."), with an "Abrir Ajustes" button that opens the
+Accessibility privacy pane directly, and a "Revisar permiso" button to
+recheck without restarting the app. The status also rechecks automatically
+whenever the app becomes active again (e.g. after returning from System
+Settings). Missing this permission is non-fatal: the record/stop button in
+the main window always works regardless of it.
 
 ## Architecture
 
@@ -92,8 +117,10 @@ xcodebuild -project Scribe.xcodeproj -scheme Scribe \
 | `TranscriptEditorView.swift` | Editable transcript area, with placeholder and word/character counter. |
 | `StatusBadgeView.swift` | Compact indicator of the app's current state. |
 | `ModelStatusView.swift` | Model status (installed / downloading / not installed). |
+| `HotkeyStatusView.swift` | Global Option shortcut status and Accessibility-permission recovery UI. |
 | `PrivacyNoteView.swift` | Fixed privacy note at the bottom of the window. |
 | `AudioRecorderService.swift` | Records audio to a local WAV file (16 kHz, mono, 16-bit). |
+| `GlobalHotkeyService.swift` | Global Option-key monitor (`GlobalHotkeyServicing`) and its `HotkeyStatus`. |
 | `MicrophonePermissionManager.swift` | System microphone permission. |
 | `ModelManager.swift` | Presence and explicit download of the WhisperKit model. |
 | `TranscriptionService.swift` | Wraps WhisperKit to transcribe locally. |
@@ -279,61 +306,73 @@ transcription), these don't indicate a real problem.
   earlier.
 - No model selector: it always uses the same WhisperKit model fixed in
   `ModelManager`.
-- No global keyboard shortcut, menu bar icon, or live transcription while
-  recording (all of this is intentional: out of scope for this version and
-  reserved for a future one).
+- No menu bar icon or live transcription while recording (out of scope for
+  this version, reserved for a future one).
+- The global shortcut is fixed to Option alone; it isn't configurable and
+  there's no alternative combo.
+- No "hold to talk" mode: the shortcut always toggles start/stop, it never
+  records only while a key is held down.
 
-## MVP3 readiness
+## MVP3: global Option shortcut
 
-MVP2.5 exists to make the global-hotkey work in MVP3 safe to add without
-restructuring the app again. Concretely:
+Scribe's global dictation trigger is the Option key alone, pressed with no
+other modifier, from anywhere in macOS — not just with Scribe's window
+focused. See "Global Option shortcut and Accessibility permission" above for
+the user-facing behavior and permission flow.
+
+Implementation notes:
 
 - `GlobalHotkeyServicing` (`Scribe/GlobalHotkeyService.swift`) is the
-  protocol a hotkey service must implement: `start(onHotkeyPressed:)` and
-  `stop()`, nothing else. It only reports "the hotkey fired" — it has no
-  opinion on what recording should do. `DictationViewModel` takes one as an
-  injectable dependency (default `LiveGlobalHotkeyService()`, matching the
-  pattern used for every other service) and wires its callback straight to
-  `handlePrimaryDictationAction(source: .globalHotkey)` in `init`.
-  `LiveGlobalHotkeyService` is currently a skeleton: `start` stores the
-  callback but does not register anything with the OS yet. Registering
-  Control+Option+Space (via `NSEvent.addGlobalMonitorForEvents` or a Carbon
-  event tap) and calling the callback on the main actor is the one piece
-  left for the next phase — everything downstream of "hotkey fired" already
-  works and is covered by `ScribeTests/GlobalHotkeyServiceTests.swift`.
-- The hotkey handler should call
-  `DictationViewModel.handlePrimaryDictationAction(source: .globalHotkey)` —
-  the same method the record/stop button already calls with
-  `source: .userInterface` — instead of re-implementing start/stop/transcribe
-  logic. This is what keeps the hotkey and the UI from getting out of sync
-  (e.g. the hotkey starting a second recording while one is already running,
-  or bypassing the replace/clear-transcript confirmation).
+  protocol a hotkey service must implement: `start(onHotkeyPressed:)`,
+  `stop()`, and `currentStatus() -> HotkeyStatus`. It only reports "the
+  hotkey fired" or "this is its current status" — it has no opinion on what
+  recording should do. `DictationViewModel` takes one as an injectable
+  dependency (default `LiveGlobalHotkeyService()`, matching the pattern used
+  for every other service) and wires its callback straight to
+  `handlePrimaryDictationAction(source: .globalHotkey)` in `init` — the same
+  method the record/stop button already calls with `source: .userInterface`
+  — instead of re-implementing start/stop/transcribe logic. This is what
+  keeps the hotkey and the UI from getting out of sync (e.g. the hotkey
+  starting a second recording while one is already running, or bypassing the
+  replace/clear-transcript confirmation).
+- `LiveGlobalHotkeyService` registers a `flagsChanged` global monitor via
+  `NSEvent.addGlobalMonitorForEvents` and fires the callback only on the
+  transition into exactly `[.option]` (so holding Option doesn't
+  repeat-trigger it), hopping to the main actor before calling back.
+- `HotkeyStatus` (`.unknown` / `.active` / `.accessibilityPermissionRequired`
+  / `.failed(String)`) is recalculated on every `currentStatus()` call, never
+  cached — the monitor is installed unconditionally on `start`, regardless of
+  the Accessibility permission, so if the user grants it later the shortcut
+  starts working without an app restart, and the next `currentStatus()` call
+  (e.g. when the app becomes active again) reflects `.active` right away.
 - State lives in one place (`AppState`, see "State model" above), so the
   hotkey doesn't need its own state machine; it reads and mutates the exact
-  state the UI reads and mutates.
+  state the UI reads and mutates. `hotkeyStatus` on `DictationViewModel` is a
+  separate, independent piece of state purely for the shortcut's own
+  status UI.
 
-Remaining risks to resolve before wiring up the actual shortcut:
+Remaining risks:
 
-- `pendingConfirmation` (replace/clear transcript) is currently resolved
-  through a SwiftUI alert bound to the main window. What a hotkey should do
-  when it fires while that alert is pending — queue the action, ignore it,
-  or bring the window forward — hasn't been decided yet.
-- A global hotkey usually implies the app can act without its window being
-  frontmost (or open at all). Permission prompts (`NSWorkspace`,
-  microphone access) and the confirmation alerts above have only been
-  exercised with the main window focused; their behavior when the app is
-  backgrounded or windowless is untested.
+- `pendingConfirmation` (replace/clear transcript) is resolved through a
+  SwiftUI alert bound to the main window. If the shortcut fires while that
+  alert is pending, or while the app is backgrounded/windowless, the
+  confirmation still needs the window to be visible for the user to respond
+  to it — untested end-to-end outside of a focused window.
 - Audio interruption handling (see "Error handling") reverts to `.idle` and
   sets a typed error, but there's no menu bar icon or notification yet to
   surface that to a user who triggered the whole flow via keyboard only.
+- Manual, real-device QA of the Option shortcut and the Accessibility
+  permission flow (see the checklist in "Global Option shortcut and
+  Accessibility permission") still needs a Mac with GUI/Accessibility access
+  to fully exercise — automated tests only cover it through fakes.
 
 ## Next steps (out of scope for this version)
 
-Tentative roadmap for after MVP2, in priority order:
+Tentative roadmap, in priority order:
 
-- **MVP3** — Global keyboard shortcut to record/stop without focusing the
-  window, and automatic pasting of the result into whichever app was
-  active.
+- **MVP3** — Automatic pasting of the transcription result into whichever
+  app was active before the shortcut was pressed (the global Option
+  shortcut itself, and its permission UX, are already implemented).
 - **MVP4** — Menu bar icon (menu bar extra) as an alternative way to use the
   app, without depending on the main window.
 - **MVP5** — Live transcription while recording, instead of waiting for

@@ -21,6 +21,7 @@
 		465B71CD143797137C3CEFCC /* DictationViewModelPresentationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5788AABF32BDF2FFC9220EE3 /* DictationViewModelPresentationTests.swift */; };
 		47C1D21CCFE2FBD4908498BE /* ModelManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 35CFB6E9CC787F17C0F71EDD /* ModelManager.swift */; };
 		56CD80C1D6AECC3A0B9E8E49 /* AudioRecorderService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 44B2F7FEBA1CBE0089ADBD0E /* AudioRecorderService.swift */; };
+		5880B0985563F3EF94D5FE99 /* HotkeyStatusView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 34FF26B410D5C7C16F7E1E96 /* HotkeyStatusView.swift */; };
 		677C7340709011E46AE4C5C6 /* DictationViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = ABEC576C257EBCC1A11F433C /* DictationViewModel.swift */; };
 		688DB5F1BFF8EFA1B24BE90A /* RecordingButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9EFAB976640859385E76E674 /* RecordingButton.swift */; };
 		6E8BDDB5615BAC53C9529082 /* RecordingFeedbackView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAF320CCF01FC0F6A5184B5A /* RecordingFeedbackView.swift */; };
@@ -57,6 +58,7 @@
 		270EB5CBE621E352E36B2C0E /* StoragePaths.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoragePaths.swift; sourceTree = "<group>"; };
 		2A1463777BA069A6A08D55E9 /* PrivacyNoteView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PrivacyNoteView.swift; sourceTree = "<group>"; };
 		3459846C3E245FF0263E574C /* TranscriptionService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TranscriptionService.swift; sourceTree = "<group>"; };
+		34FF26B410D5C7C16F7E1E96 /* HotkeyStatusView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HotkeyStatusView.swift; sourceTree = "<group>"; };
 		35CFB6E9CC787F17C0F71EDD /* ModelManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModelManager.swift; sourceTree = "<group>"; };
 		3D685A22D63623268BD4FC1D /* ClipboardService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipboardService.swift; sourceTree = "<group>"; };
 		4441F0083ADE7D9BE26DFDFC /* SmokeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SmokeTests.swift; sourceTree = "<group>"; };
@@ -134,6 +136,7 @@
 				E66F58B9DD78240A1F23C206 /* ContentView.swift */,
 				ABEC576C257EBCC1A11F433C /* DictationViewModel.swift */,
 				4C7A670618EFD1E449579B15 /* GlobalHotkeyService.swift */,
+				34FF26B410D5C7C16F7E1E96 /* HotkeyStatusView.swift */,
 				7E838D859C563E1B532B8EFC /* MicrophonePermissionManager.swift */,
 				35CFB6E9CC787F17C0F71EDD /* ModelManager.swift */,
 				74ED8332E20E822B8025B48A /* ModelStatusView.swift */,
@@ -272,6 +275,7 @@
 				AEED381763459F5F54EC8408 /* ContentView.swift in Sources */,
 				677C7340709011E46AE4C5C6 /* DictationViewModel.swift in Sources */,
 				E793C933DE259EC52429937C /* GlobalHotkeyService.swift in Sources */,
+				5880B0985563F3EF94D5FE99 /* HotkeyStatusView.swift in Sources */,
 				3BE38A3E5F6252F278220281 /* MicrophonePermissionManager.swift in Sources */,
 				47C1D21CCFE2FBD4908498BE /* ModelManager.swift in Sources */,
 				1180EC96063AAD732650FCC8 /* ModelStatusView.swift in Sources */,

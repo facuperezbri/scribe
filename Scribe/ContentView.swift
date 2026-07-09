@@ -2,6 +2,7 @@ import SwiftUI
 
 struct ContentView: View {
     @StateObject private var viewModel = DictationViewModel()
+    @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
         VStack(spacing: 18) {
@@ -71,11 +72,22 @@ struct ContentView: View {
                     onDownload: viewModel.downloadModel
                 )
 
+                HotkeyStatusView(
+                    status: viewModel.hotkeyStatus,
+                    onOpenSettings: viewModel.openAccessibilityPrivacySettings,
+                    onRefresh: viewModel.refreshHotkeyStatus
+                )
+
                 PrivacyNoteView()
             }
         }
         .padding(24)
         .frame(minWidth: 440, minHeight: 580)
+        .onChange(of: scenePhase) { newPhase in
+            if newPhase == .active {
+                viewModel.refreshHotkeyStatus()
+            }
+        }
         .confirmationDialog(
             confirmationTitle,
             isPresented: isPendingConfirmationPresented,

@@ -112,8 +112,12 @@ final class FakeTranscriptStore: TranscriptStoring {
 
 final class FakeGlobalHotkeyService: GlobalHotkeyServicing {
     var startResult: Result<Void, Error> = .success(())
+    /// Lo que devuelve `currentStatus()`. Los tests lo cambian entre llamadas para simular, por
+    /// ejemplo, que el usuario otorgó el permiso de Accesibilidad después de que la app arrancó.
+    var statusResult: HotkeyStatus = .active
     private(set) var startCallCount = 0
     private(set) var stopCallCount = 0
+    private(set) var currentStatusCallCount = 0
     private var onHotkeyPressed: (@MainActor () -> Void)?
 
     func start(onHotkeyPressed: @escaping @MainActor () -> Void) throws {
@@ -125,6 +129,11 @@ final class FakeGlobalHotkeyService: GlobalHotkeyServicing {
     func stop() {
         stopCallCount += 1
         onHotkeyPressed = nil
+    }
+
+    func currentStatus() -> HotkeyStatus {
+        currentStatusCallCount += 1
+        return statusResult
     }
 
     /// Simula que el atajo global se detectó, sin depender de un event tap real.

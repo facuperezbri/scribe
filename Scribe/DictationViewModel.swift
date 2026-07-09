@@ -65,6 +65,7 @@ final class DictationViewModel: ObservableObject {
     @Published var pendingConfirmation: PendingConfirmation?
     @Published var recordingElapsed: TimeInterval = 0
     @Published var inputLevel: Float = 0
+    @Published var hotkeyStatus: HotkeyStatus = .unknown
 
     private let audioRecorder: AudioRecordingServicing
     private let transcriptionService: TranscriptionServicing
@@ -130,6 +131,7 @@ final class DictationViewModel: ObservableObject {
         try? self.globalHotkeyService.start { [weak self] in
             self?.handlePrimaryDictationAction(source: .globalHotkey)
         }
+        hotkeyStatus = self.globalHotkeyService.currentStatus()
     }
 
     /// Estado "en reposo" real a partir del modelo instalado y el permiso de micrófono
@@ -331,6 +333,22 @@ final class DictationViewModel: ObservableObject {
     func openMicrophonePrivacySettings() {
         guard let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone") else { return }
         NSWorkspace.shared.open(url)
+    }
+
+    /// Abre la sección de privacidad de Accesibilidad en Ajustes del Sistema (donde se habilita
+    /// Scribe para que el atajo global de Option funcione). Si el deep link no resuelve en esta
+    /// versión de macOS, `NSWorkspace` simplemente no abre nada; no hay fallback porque no vale
+    /// la pena mantener dos textos de ayuda ligeramente distintos para ese caso borde.
+    func openAccessibilityPrivacySettings() {
+        guard let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility") else { return }
+        NSWorkspace.shared.open(url)
+    }
+
+    /// Vuelve a consultar el estado del atajo global sin reiniciar el servicio. Se llama al
+    /// volver a la app desde Ajustes del Sistema (Fase 6 de MVP3) y también puede ofrecerse como
+    /// botón explícito ("Revisar permiso") para el mismo efecto.
+    func refreshHotkeyStatus() {
+        hotkeyStatus = globalHotkeyService.currentStatus()
     }
 
     private func beginRecording() {
