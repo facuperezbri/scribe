@@ -125,42 +125,21 @@ final class GlobalHotkeyServiceTests: XCTestCase {
         XCTAssertEqual(viewModel.state.session, .transcribing)
     }
 
-    /// Regla de comportamiento 4: con una transcripción no vacía, el atajo no la sobreescribe
-    /// directamente, dispara la misma confirmación que usa el botón.
-    func testGlobalHotkeyPressWithNonEmptyTranscriptRequiresConfirmation() async {
+    /// Regla de comportamiento 4 (revisada en la Fase 2 del rediseño estilo Wispr): con una
+    /// transcripción no vacía, el atajo la reemplaza directo, igual que el botón — ya no hay
+    /// confirmación bloqueante antes de grabar.
+    func testGlobalHotkeyPressWithNonEmptyTranscriptStartsImmediately() async {
         let hotkeyService = FakeGlobalHotkeyService()
         let audioRecorder = FakeAudioRecordingService()
         let viewModel = makeViewModel(hotkeyService: hotkeyService, audioRecorder: audioRecorder)
         viewModel.transcript = "transcripción anterior"
 
         hotkeyService.simulateHotkeyPressed()
-
-        XCTAssertEqual(viewModel.pendingConfirmation, .replaceTranscript)
-        XCTAssertEqual(audioRecorder.startRecordingCallCount, 0)
-
-        viewModel.confirmPendingAction()
         try? await Task.sleep(for: .milliseconds(50))
 
         XCTAssertNil(viewModel.pendingConfirmation)
         XCTAssertEqual(audioRecorder.startRecordingCallCount, 1)
         XCTAssertEqual(viewModel.state.session, .recording)
-    }
-
-    /// Regla de comportamiento 5: con una confirmación ya pendiente, una presión adicional del
-    /// atajo no debe apilar una segunda confirmación ni saltearla.
-    func testGlobalHotkeyPressWithPendingConfirmationDoesNotDuplicateIt() {
-        let hotkeyService = FakeGlobalHotkeyService()
-        let audioRecorder = FakeAudioRecordingService()
-        let viewModel = makeViewModel(hotkeyService: hotkeyService, audioRecorder: audioRecorder)
-        viewModel.transcript = "transcripción anterior"
-
-        hotkeyService.simulateHotkeyPressed()
-        XCTAssertEqual(viewModel.pendingConfirmation, .replaceTranscript)
-
-        hotkeyService.simulateHotkeyPressed()
-
-        XCTAssertEqual(viewModel.pendingConfirmation, .replaceTranscript)
-        XCTAssertEqual(audioRecorder.startRecordingCallCount, 0)
     }
 
     /// Regla de comportamiento 6: sin permiso de micrófono, el atajo no arranca a grabar; el
@@ -418,5 +397,66 @@ final class GlobalHotkeyServiceTests: XCTestCase {
         try? await Task.sleep(for: .milliseconds(50))
 
         XCTAssertEqual(pressCount, 1)
+    }
+
+    // MARK: - Fase 2 de MVP4: monitor local (Scribe en foreground)
+
+    /// `handleLocalKeyDown` es lo que el monitor local invoca por cada evento mientras Scribe es
+    /// la app activa: debe disparar el atajo con la misma lógica que el monitor global.
+    func testHandleLocalKeyDownFiresOnFnSpace() async {
+        let service = LiveGlobalHotkeyService()
+        var pressCount = 0
+        try? service.start { pressCount += 1 }
+
+        _ = service.handleLocalKeyDown(
+            makeKeyDownEvent(keyCode: LiveGlobalHotkeyService.spaceKeyCode, modifierFlags: .function)
+        )
+        try? await Task.sleep(for: .milliseconds(50))
+
+        XCTAssertEqual(pressCount, 1)
+    }
+
+    /// El monitor local nunca debe tragarse el evento: si lo hiciera, escribir un espacio normal
+    /// dentro de Scribe (p. ej. en el editor de la transcripción) dejaría de funcionar.
+    func testHandleLocalKeyDownReturnsEventUnchanged() {
+        let service = LiveGlobalHotkeyService()
+        try? service.start {}
+        let event = makeKeyDownEvent(keyCode: LiveGlobalHotkeyService.spaceKeyCode, modifierFlags: [])
+
+        let returned = service.handleLocalKeyDown(event)
+
+        XCTAssertTrue(returned === event)
+    }
+
+    /// Igual que con el monitor global: Space sin Fn no dispara el atajo local.
+    func testHandleLocalKeyDownDoesNotFireForSpaceAlone() async {
+        let service = LiveGlobalHotkeyService()
+        var pressed = false
+        try? service.start { pressed = true }
+
+        _ = service.handleLocalKeyDown(makeKeyDownEvent(keyCode: LiveGlobalHotkeyService.spaceKeyCode, modifierFlags: []))
+        try? await Task.sleep(for: .milliseconds(50))
+
+        XCTAssertFalse(pressed)
+    }
+
+    /// `start()` instala tanto el monitor global como el local; `stop()` deja el estado en
+    /// `.unknown` de nuevo, igual que antes de llamar a `start` — cubre que ambos monitores se
+    /// liberan (si solo se liberara uno, `currentStatus()` seguiría reportando `.unknown` igual
+    /// gracias a `hasStarted`, pero un monitor local huérfano seguiría entregando eventos al
+    /// callback ya limpiado; por eso `handleKeyDown` no dispara nada tras `stop()`).
+    func testStopClearsBothMonitorsSoHandleKeyDownNoLongerFires() async {
+        let service = LiveGlobalHotkeyService()
+        var pressCount = 0
+        try? service.start { pressCount += 1 }
+
+        service.stop()
+        service.handleKeyDown(
+            makeKeyDownEvent(keyCode: LiveGlobalHotkeyService.spaceKeyCode, modifierFlags: .function)
+        )
+        try? await Task.sleep(for: .milliseconds(50))
+
+        XCTAssertEqual(pressCount, 0)
+        XCTAssertEqual(service.currentStatus(), .unknown)
     }
 }

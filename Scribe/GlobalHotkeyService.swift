@@ -96,6 +96,19 @@ protocol GlobalHotkeyServicing {
 /// MVP3) es la vía por la que la UI se entera de ese estado y lo vuelve a consultar sin reiniciar
 /// el servicio.
 ///
+/// ## Local + global (Fase 2 de MVP4)
+/// `NSEvent.addGlobalMonitorForEvents` únicamente entrega eventos destinados a *otras* apps: en
+/// cuanto Scribe pasa a ser la app activa (p. ej. porque el usuario abrió la ventana principal),
+/// el sistema deja de mandarle esos eventos al monitor global y los despacha por el camino normal
+/// de la app, donde nada los interceptaba — por eso Fn + Espacio dejaba de andar apenas Scribe
+/// tenía el foco. `NSEvent.addLocalMonitorForEvents` cubre exactamente el caso complementario:
+/// solo ve eventos mientras la app es la activa. Ambos caminos de despacho son mutuamente
+/// excluyentes para un mismo evento físico (AppKit lo manda por uno u otro, nunca por los dos), así
+/// que instalar los dos monitores no duplica el disparo del atajo; cada uno delega en el mismo
+/// `handleKeyDown`, que sigue siendo la única lógica de detección. El monitor local no depende del
+/// permiso de Accesibilidad (solo el global lo necesita), y devuelve el evento sin modificar para
+/// no tragarse ninguna tecla normal que el usuario escriba dentro de Scribe.
+///
 /// ## Limitaciones conocidas
 /// - No verificado en hardware real durante esta migración (sin captura de pantalla ni automation
 ///   de UI disponible en este entorno): el comportamiento de Fn en distintos modelos de teclado
@@ -111,7 +124,14 @@ final class LiveGlobalHotkeyService: GlobalHotkeyServicing {
     static let spaceKeyCode: UInt16 = 49
 
     private var onHotkeyPressed: (@MainActor () -> Void)?
-    private var monitor: Any?
+    /// Ve el atajo cuando otra app tiene el foco (Scribe no es la app activa). Requiere permiso
+    /// de Accesibilidad.
+    private var globalMonitor: Any?
+    /// Ve el atajo cuando Scribe mismo es la app activa (ventana principal al frente, o
+    /// simplemente activada sin ventana visible). No requiere permiso de Accesibilidad: por eso
+    /// `currentStatus()` sigue basando `.active`/`.accessibilityPermissionRequired` solo en
+    /// `globalMonitor` + `AXIsProcessTrusted()`.
+    private var localMonitor: Any?
     /// `true` desde que `start` se llama por primera vez hasta el siguiente `stop`. Distingue
     /// "todavía no arrancó" (`.unknown`) de "arrancó, pero sin permiso de Accesibilidad todavía"
     /// (`.accessibilityPermissionRequired`) en `currentStatus()`.
@@ -128,11 +148,14 @@ final class LiveGlobalHotkeyService: GlobalHotkeyServicing {
         lastRegistrationError = nil
         hasStarted = true
 
-        monitor = NSEvent.addGlobalMonitorForEvents(matching: .keyDown) { [weak self] event in
+        globalMonitor = NSEvent.addGlobalMonitorForEvents(matching: .keyDown) { [weak self] event in
             self?.handleKeyDown(event)
         }
+        localMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            self?.handleLocalKeyDown(event) ?? event
+        }
 
-        guard monitor != nil else {
+        guard globalMonitor != nil, localMonitor != nil else {
             let error = GlobalHotkeyServiceError.registrationFailed
             lastRegistrationError = error
             throw error
@@ -146,10 +169,14 @@ final class LiveGlobalHotkeyService: GlobalHotkeyServicing {
     }
 
     func stop() {
-        if let monitor {
-            NSEvent.removeMonitor(monitor)
+        if let globalMonitor {
+            NSEvent.removeMonitor(globalMonitor)
         }
-        monitor = nil
+        if let localMonitor {
+            NSEvent.removeMonitor(localMonitor)
+        }
+        globalMonitor = nil
+        localMonitor = nil
         onHotkeyPressed = nil
         hasStarted = false
     }
@@ -160,7 +187,7 @@ final class LiveGlobalHotkeyService: GlobalHotkeyServicing {
     /// Sistema) ve `.active` sin reiniciar el monitor.
     func currentStatus() -> HotkeyStatus {
         guard hasStarted else { return .unknown }
-        guard monitor != nil else {
+        guard globalMonitor != nil, localMonitor != nil else {
             return .failed(GlobalHotkeyServiceError.registrationFailed.errorDescription ?? GlobalHotkeyServiceError.registrationFailed.localizedDescription)
         }
         return AXIsProcessTrusted() ? .active : .accessibilityPermissionRequired
@@ -184,5 +211,15 @@ final class LiveGlobalHotkeyService: GlobalHotkeyServicing {
         Task { @MainActor in
             callback()
         }
+    }
+
+    /// Wrapper de `handleKeyDown` para el monitor local: siempre devuelve el evento recibido sin
+    /// modificar, para no tragarse ninguna tecla normal que el usuario escriba dentro de Scribe
+    /// (p. ej. en el editor de la transcripción). `internal` (no `private`), igual que
+    /// `handleKeyDown`, para que los tests puedan verificar el passthrough sin instalar un monitor
+    /// real.
+    func handleLocalKeyDown(_ event: NSEvent) -> NSEvent? {
+        handleKeyDown(event)
+        return event
     }
 }
