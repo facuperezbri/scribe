@@ -16,10 +16,12 @@ final class RecordingOverlayController {
     private var cancellable: AnyCancellable?
     private var hideTask: Task<Void, Never>?
     private var lastPhase: RecordingOverlayPhase = .hidden
+    private var isPanelVisible = false
 
     /// Cuánto se muestra "Listo" antes de desaparecer sola.
     private static let doneDisplayDuration: Duration = .milliseconds(1200)
     private static let topMargin: CGFloat = 46
+    private static let fadeDuration: TimeInterval = 0.15
 
     init(viewModel: DictationViewModel) {
         let hostingView = NSHostingView(rootView: RecordingOverlayView(phase: .hidden, elapsed: 0, inputLevel: 0))
@@ -60,18 +62,22 @@ final class RecordingOverlayController {
             hideTask?.cancel()
             hideTask = nil
             lastPhase = .hidden
-            panel.orderOut(nil)
+            fadeOut()
         case .recording, .transcribing:
             hideTask?.cancel()
             hideTask = nil
             lastPhase = phase
             layoutPanel()
-            panel.orderFrontRegardless()
+            if !isPanelVisible {
+                fadeIn()
+            }
         case .done:
             layoutPanel()
             guard lastPhase != .done else { return }
             lastPhase = .done
-            panel.orderFrontRegardless()
+            if !isPanelVisible {
+                fadeIn()
+            }
             hideTask = Task { [weak self] in
                 try? await Task.sleep(for: Self.doneDisplayDuration)
                 guard !Task.isCancelled else { return }
@@ -83,7 +89,34 @@ final class RecordingOverlayController {
     private func dismissDone() {
         guard lastPhase == .done else { return }
         lastPhase = .hidden
-        panel.orderOut(nil)
+        fadeOut()
+    }
+
+    /// Aparece/desaparece con un fundido corto en vez de un corte seco: sigue sin robar foco (el
+    /// fundido no cambia `ignoresMouseEvents`/`nonactivatingPanel`), solo se siente menos abrupto.
+    private func fadeIn() {
+        isPanelVisible = true
+        panel.alphaValue = 0
+        panel.orderFrontRegardless()
+        NSAnimationContext.runAnimationGroup { context in
+            context.duration = Self.fadeDuration
+            panel.animator().alphaValue = 1
+        }
+    }
+
+    private func fadeOut() {
+        guard isPanelVisible else { return }
+        isPanelVisible = false
+        NSAnimationContext.runAnimationGroup(
+            { context in
+                context.duration = Self.fadeDuration
+                panel.animator().alphaValue = 0
+            },
+            completionHandler: { [weak self] in
+                guard let self, !self.isPanelVisible else { return }
+                self.panel.orderOut(nil)
+            }
+        )
     }
 
     /// Centra la burbuja horizontalmente, cerca del borde superior de la pantalla principal.

@@ -83,17 +83,23 @@ reasoning behind that layout.
    prominent "Copiar" action. The text itself appears below in a smaller,
    secondary transcript card, with a word/character counter under it. It can
    be edited by hand, copied with the "Copiar" button next to "Limpiar", or
-   cleared with "Limpiar". Recording again or clearing while there's an
-   existing transcript asks for confirmation before replacing or deleting it.
+   cleared with "Limpiar". Recording again while there's an existing
+   transcript starts immediately (no confirmation) and replaces it, showing
+   a small "Deshacer reemplazo" button to bring the previous one back; only
+   "Limpiar" still asks for confirmation, since it's the one way to lose text
+   with no way back. See "Phase 10" below for why.
 5. Once the model is installed, "Ver en Finder" opens the folder where it
    lives on disk.
 6. Pressing Fn + Espacio anywhere in macOS — not just with Scribe's window
-   focused — brings Scribe to the front and starts recording; pressing
-   Fn + Espacio again stops it and starts transcription, exactly as if the
-   "Grabar"/"Detener" button had been pressed. Holding it down doesn't
-   repeat-trigger it. If Scribe's window is minimized, it's unminimized; if
-   it was closed while the app kept running, pressing Fn + Espacio reopens
-   it.
+   focused — starts recording, exactly as if the "Grabar" button had been
+   pressed; pressing it again stops and starts transcription. Holding it
+   down doesn't repeat-trigger it. Since MVP4, the shortcut is
+   **background-first**: it never brings Scribe's window to the front or
+   steals focus from whichever app you're dictating into. A small floating
+   overlay near the top of the screen shows recording/transcribing feedback
+   instead, and a menu bar item is always available as an alternative way to
+   start/stop, show the window, or copy the last transcript — see "MVP4"
+   below for both.
 
 ### Global Fn + Espacio shortcut and Accessibility permission
 
@@ -131,8 +137,10 @@ whenever the app becomes active again (e.g. after returning from System
 Settings). Missing this permission is non-fatal: the record/stop button in
 the main window always works regardless of it.
 
-Pressing Fn + Espacio also brings Scribe's window to the front, regardless of
-which app currently has focus — see "Window activation" below.
+Since MVP4 (Phase 3), pressing Fn + Espacio no longer brings Scribe's window
+to the front — see "Window activation" below for why, and "MVP4" for the
+floating overlay and menu bar item that replace the window as feedback/entry
+points while dictating in the background.
 
 **Known limitation:** Fn combined with certain keys (arrows, Delete, F-keys)
 is intercepted by the keyboard driver for built-in system functions before it
@@ -144,18 +152,26 @@ hasn't been confirmed on real hardware across every keyboard model (see
 
 ### Window activation
 
-When the global Fn + Espacio shortcut fires, `DictationViewModel` first asks
-`WindowActivationServicing` to activate the app and bring its window to the
-front, then runs the same `handlePrimaryDictationAction` the button uses —
-so pressing Fn + Espacio always shows Scribe before deciding whether to
-record, show the replace/clear confirmation, or just keep showing the
-transcribing state. The click-driven button path never calls this, since the
-window is already the one the user just clicked in.
+Through MVP3, the global Fn + Espacio shortcut used to bring Scribe's window
+to the front before recording, on the theory that the user should always see
+what triggered. MVP4 (Phase 3) removed that: Scribe is meant to be used as a
+background utility, so pressing Fn + Espacio now runs
+`handlePrimaryDictationAction` directly, with no window activation at all —
+identical to what the click-driven button path already did, since the window
+is already the one the user just clicked in. Feedback while dictating in the
+background comes instead from the floating overlay and the menu bar item
+(see "MVP4" below), not from the main window popping up.
+
+Window activation itself wasn't deleted, since showing the window on demand
+is still useful — it just moved to an explicit, user-initiated entry point.
+`DictationViewModel.showMainWindow()` (Phase 4) calls
+`WindowActivationServicing.activateMainWindow()` and is wired to "Mostrar
+Scribe" in the menu bar's menu (`Scribe/MenuBarContentView.swift`).
 
 `LiveWindowActivationService` (`Scribe/WindowActivationService.swift`) calls
 `NSApplication.shared.activate(ignoringOtherApps: true)`, unhides the app if
 hidden, and deminiaturizes the window if it was minimized. `DictationViewModel`
-now lives in `AppDelegate` (`Scribe/AppDelegate.swift`), not as `ContentView`'s
+lives in `AppDelegate` (`Scribe/AppDelegate.swift`), not as `ContentView`'s
 `@StateObject`: closing the window used to deallocate the view model along
 with it, which silently killed the global hotkey monitor (it captures `self`
 as `weak`) until the app was relaunched. Owning it at the app level keeps the
@@ -168,18 +184,22 @@ If the window was closed entirely (no `NSWindow` left to reactivate),
 `@Environment(\.openWindow)` action for the `WindowGroup(id: "main")` scene.
 Because it's a singleton `WindowGroup` (no associated per-window data type),
 calling `openWindow(id:)` while a window already exists just brings that
-window forward instead of creating a second one, so repeated Fn + Espacio
-presses never produce duplicate windows.
+window forward instead of creating a second one, so repeated activations
+never produce duplicate windows.
 
 ## Architecture
 
 | File | Responsibility |
 |---|---|
 | `ScribeApp.swift` | App entry point (`WindowGroup`) and the `openWindow` bridge for reopening a closed window. |
-| `AppDelegate.swift` | Owns the single long-lived `DictationViewModel`, independent of window lifecycle. |
+| `AppDelegate.swift` | Owns the single long-lived `DictationViewModel` and the `RecordingOverlayController`, independent of window lifecycle. |
 | `ContentView.swift` | Main SwiftUI layout and confirmation dialogs. |
+| `Metrics.swift` | Shared spacing/corner-radius constants and the `cardBackground()` view modifier. |
 | `DictationViewModel.swift` | App state, `PrimaryState` copy mapping, and orchestration between services. |
-| `WindowActivationService.swift` | Brings Scribe's window to the front (`WindowActivationServicing`) when the global shortcut fires. |
+| `MenuBarContentView.swift` | Menu bar icon (`MenuBarStatusIcon`) and menu (`MenuBarContentView`): start/stop, copy last transcript, show window, permission shortcuts, quit. |
+| `RecordingOverlayController.swift` | Owns the non-activating `NSPanel` that shows the floating recording/transcribing/done overlay without stealing focus. |
+| `RecordingOverlayView.swift` | SwiftUI content of the floating overlay capsule (level bars, cascading dots, checkmark). |
+| `WindowActivationService.swift` | Brings Scribe's window to the front (`WindowActivationServicing`), used by `showMainWindow()` for the menu bar's "Mostrar Scribe". |
 | `ScribeHeaderView.swift` | Fixed header: app name and "Dictado local" line. |
 | `DictationStatusView.swift` | Central status area: icon, `PrimaryState` title, and the recording/transcribing/copy feedback nested inside it. |
 | `RecordingButton.swift` | Main Record/Stop button. |
@@ -224,11 +244,13 @@ hotkey held down) can't start two recordings or transcribe twice.
 identifies itself without duplicating the logic above — see "MVP3
 readiness" below.
 
-Replacing or clearing a non-empty transcript is a destructive action, so
-`handlePrimaryDictationAction`/`clearTranscript` don't do it directly:
-they set `pendingConfirmation` (`.replaceTranscript` / `.clearTranscript`),
-which `ContentView` renders as a confirmation alert, and only
-`confirmPendingAction()`/`cancelPendingConfirmation()` resolve it.
+Clearing a non-empty transcript is the one destructive, no-way-back action
+left, so `clearTranscript()` doesn't do it directly: it sets
+`pendingConfirmation = .clearTranscript`, which `ContentView` renders as a
+confirmation alert, and only `confirmPendingAction()`/
+`cancelPendingConfirmation()` resolve it. Recording again over a non-empty
+transcript is *not* treated this way anymore — see "Phase 10" below for why,
+and how `previousTranscript` covers the same risk without a blocking dialog.
 
 `PrimaryState` (Phase 8) is a separate, derived mapping used only for the
 big title in `DictationStatusView` — `.ready`, `.recording`,
@@ -377,26 +399,83 @@ short-lived helper process). Apple's own message says as much: `benign
 unless unexpected`. If the app works fine (recording, permission,
 transcription), these don't indicate a real problem.
 
+## Manual QA checklist
+
+No screenshot-based or automated UI testing is used in this project — visual
+and end-to-end checks are manual, run by a person on a real Mac. This list
+consolidates the checks called out throughout this document (referenced
+above as "Manual QA"/"Manual QA checklist"):
+
+- **Recording basics** — click the record button, speak, click again to
+  stop; the transcript appears and "Copiar" puts it on the clipboard.
+- **Fn + Espacio (background-first)** — with another app focused (e.g. a
+  text editor) and Scribe's window closed or minimized, press Fn + Espacio:
+  recording should start with the floating overlay appearing near the top
+  of the screen, and the other app should keep its focus/key window the
+  whole time — Scribe's window must NOT come to the front or steal focus.
+  Press again to stop and transcribe. Try it on more than one keyboard model
+  if possible (built-in vs. Magic Keyboard vs. third-party), since Fn-key
+  behavior can vary (see "MVP3").
+- **Floating overlay** — confirm it shows a mic-level indicator while
+  recording (bars should react to actual mic input), a cascading-dots
+  indicator while transcribing, and a brief checkmark "Listo" flash after a
+  successful transcription that disappears on its own; confirm it does NOT
+  flash "Listo" after a cancelled or failed transcription, or on app launch
+  with a previously restored transcript.
+- **Menu bar item** — confirm the icon changes between idle, recording,
+  busy/transcribing, downloading, and needs-attention states; confirm
+  "Iniciar dictado"/"Detener dictado", "Copiar última transcripción",
+  "Mostrar Scribe", and the permission/model shortcuts in the menu all work
+  and stay in sync with the main window's own controls.
+- **Instant replace + undo** — with a transcript already showing, record
+  again (button or hotkey): it should start immediately with no dialog. Once
+  transcribed, a "Deshacer reemplazo" pill should appear; clicking it should
+  bring back the previous text and make the pill disappear.
+- **Clear confirmation** — with a non-empty transcript, click "Limpiar": it
+  should ask for confirmation before actually clearing.
+- **Model missing/downloading** — with the model not installed, confirm the
+  "Descargar modelo..." button and progress bar behave as described in
+  "Model" above, and that recording still works before the model finishes
+  downloading (only transcribing needs it).
+- **Microphone permission denied** — deny the permission (System Settings)
+  and confirm the app shows the blocked state with a working "Abrir Ajustes
+  del Sistema" button, without crashing or getting stuck.
+- **Accessibility permission required** — revoke Accessibility for Scribe
+  and confirm `HotkeyStatusView` shows the recovery UI ("Abrir Ajustes" /
+  "Revisar permiso"), and that the record button still works even though the
+  global shortcut doesn't.
+- **Visual pass** — at the window's minimum size, confirm the status card
+  and transcript card don't clip or overlap, and check both light and dark
+  appearance (System Settings > Appearance).
+- **App icon** — confirm the Dock icon, Cmd-Tab switcher, and Finder all
+  show the new icon (not the default Swift/Xcode placeholder), and that it
+  stays legible at the smallest sizes.
+
 ## Known limitations
 
 - Spanish only; no language selector or auto-detection.
-- No custom app icon.
 - Error handling is basic: messages are shown as text, with no automatic
   retries beyond leaving the buttons available to try again.
 - Each transcription replaces the previous one; there's no append mode or
-  history of past transcriptions.
+  history of past transcriptions. There's a single-slot, in-memory "undo
+  replace" (`previousTranscript`, see "Phase 10"), but it only remembers the
+  one transcript that was just overwritten, not a running history, and it's
+  lost on app restart by design.
 - Cancelling an in-progress transcription is "soft": WhisperKit doesn't
   expose a way to abort inference midway, so the app only guarantees
   discarding the result once it arrives, not stopping the computation
   earlier.
 - No model selector: it always uses the same WhisperKit model fixed in
   `ModelManager`.
-- No menu bar icon or live transcription while recording (out of scope for
-  this version, reserved for a future one).
+- No live transcription while recording; the floating overlay (MVP4) shows
+  recording/transcribing feedback, not a partial transcript.
 - The global shortcut is fixed to Fn + Espacio; it isn't configurable and
   there's no alternative combo.
 - No "hold to talk" mode: the shortcut always toggles start/stop, it never
   records only while a key is held down.
+- The floating overlay always positions itself on `NSScreen.main`; on a
+  multi-monitor setup it won't follow the display the user is currently
+  working on.
 
 ## MVP3: global shortcut (originally Option, migrated to Fn + Espacio in Phase 9)
 
@@ -422,7 +501,7 @@ Implementation notes:
   — instead of re-implementing start/stop/transcribe logic. This is what
   keeps the hotkey and the UI from getting out of sync (e.g. the hotkey
   starting a second recording while one is already running, or bypassing the
-  replace/clear-transcript confirmation).
+  clear-transcript confirmation).
 - `LiveGlobalHotkeyService` registers a `keyDown` global monitor via
   `NSEvent.addGlobalMonitorForEvents` and fires the callback only when Space
   (keyCode 49) arrives with the `.function` modifier flag set and
@@ -457,15 +536,16 @@ Remaining risks:
 
 Pressing the global shortcut no longer just toggles recording — it also
 brings Scribe's window to the front first, from any app, so the confirmation
-dialog (replace/clear transcript) and the recording/transcribing feedback are
-always visible to the user who just triggered them. See "Window activation" under
-Architecture for the implementation (`WindowActivationServicing`,
-`AppDelegate` owning `DictationViewModel`, the `openWindow` reopen bridge).
+dialog (at the time, replace *or* clear transcript — replace confirmation
+was later removed in Phase 10, only clear remains) and the
+recording/transcribing feedback are always visible to the user who just
+triggered them. See "Window activation" under Architecture for the
+implementation (`WindowActivationServicing`, `AppDelegate` owning
+`DictationViewModel`, the `openWindow` reopen bridge).
 
 This closed the risk noted above in MVP3's "Remaining risks": the
-replace/clear-transcript confirmation used to need the window already
-visible to be answerable; now the shortcut guarantees that before the
-confirmation can even appear.
+confirmation used to need the window already visible to be answerable; now
+the shortcut guarantees that before the confirmation can even appear.
 
 Known limitation: reopening a fully-closed window depends on SwiftUI's
 `openWindow(id:)` bridge being registered by `ContentView`'s `onAppear`
@@ -492,9 +572,9 @@ and a transcript that's secondary rather than the dominant element.
   When the transcript is ready and nothing more urgent is happening, it
   also shows a prominent "Copiar" call to action.
 - `TranscriptEditorView`'s minimum height dropped from 220 to 140 so it
-  reads as a secondary card, not the dominant element; it keeps its
-  placeholder, word/character counter, copy/clear buttons, and the
-  replace/clear confirmation flow untouched.
+  reads as a secondary card, not the dominant element; it kept its
+  placeholder, word/character counter, and copy/clear buttons untouched (the
+  confirmation flow itself was later simplified in Phase 10).
 - `StatusBadgeView` was retired: `DictationStatusView`'s title + icon color
   now cover the same "what's going on" signal it used to provide, and
   keeping both was redundant chatter in a compact window.
@@ -556,6 +636,132 @@ behavior can vary slightly across keyboard models (Magic Keyboard vs.
 built-in vs. third-party), so this is the main risk to validate before
 relying on it.
 
+## Phase 10: instant replace + undo buffer
+
+A Wispr-Flow-style redesign pass. The previous flow blocked a new recording
+behind a confirmation dialog ("Ya tenés una transcripción. Si grabás de
+nuevo, se va a reemplazar...") whenever there was a non-empty transcript —
+which fought the whole point of a fast, keyboard-first dictation tool: every
+re-dictation needed a mouse click to dismiss a dialog first.
+
+- `PendingConfirmation` dropped its `.replaceTranscript` case; only
+  `.clearTranscript` remains. `handlePrimaryDictationAction(source:)` now
+  calls `startRecordingIfPossible()` directly from `.idle`, with no branch
+  on whether `transcript` is empty.
+- In exchange, `DictationViewModel` added a single in-memory buffer,
+  `previousTranscript: String?` (not persisted, not a history — see "Known
+  limitations"). Right before a new transcription overwrites `transcript`
+  inside `transcribe(url:)`, the old value (if non-empty) is saved there.
+  `restorePreviousTranscript()` swaps it back and clears the buffer; it's a
+  one-shot undo, not a stack.
+- `ContentView` shows a small "Deshacer reemplazo" button whenever
+  `previousTranscript != nil`, styled as a light accent-tinted pill (see
+  "Phase 11") rather than a bordered button, to read as transient rather
+  than a permanent action.
+- "Limpiar" is unaffected: clearing a non-empty transcript still asks for
+  confirmation, since it's the one action with no way back at all —
+  `performClear()` also drops `previousTranscript`, since undoing a clear
+  the user just confirmed would be confusing.
+
+Known limitation: the undo buffer is a single slot, in memory only. It's
+lost on app restart and only remembers the one transcript that was just
+replaced — recording twice in a row without restoring loses the first one
+for good. This is intentional (a low-friction safety net, not a history
+product); a full history is tracked separately under "MVP6" below.
+
+## Phase 11: visual polish pass
+
+A layout/hierarchy pass with no behavior changes, aimed at making the
+window read like a deliberate small utility instead of a first-draft
+prototype.
+
+- Added `Scribe/Metrics.swift`: shared spacing/corner-radius constants and
+  a `cardBackground()` view modifier, replacing the ad hoc numbers each view
+  used to define on its own (14, 10, 8, 6, 4...).
+- The status area (icon, title, record button) and the transcript area
+  (editor, undo, Copiar/Limpiar) are now each wrapped in a "card" —
+  a rounded, subtly shadowed background — so they read as two clear blocks
+  instead of a flat stack of rows.
+- `DictationStatusView`'s title grew from `.title3.semibold` to
+  `.title2.bold`, and its icon now sits on a soft tinted circle that pulses
+  with it, making the central state the one thing that visibly commands
+  attention. `ScribeHeaderView` shrank to a single footnote-sized line so it
+  stops competing with that title.
+- The "Deshacer reemplazo" button (Phase 10) was restyled from a bordered
+  button into a small accent-tinted pill/capsule, to distinguish it from the
+  persistent Copiar/Limpiar actions next to it.
+
+## Phase 12: original app icon
+
+Added a first app icon; the project previously shipped with
+`ASSETCATALOG_COMPILER_APPICON_NAME` empty and no `Assets.xcassets` at all.
+
+- The icon is an abstract equalizer/waveform mark (five rounded bars, center
+  tallest) in white over a navy-to-teal diagonal gradient — original
+  geometry, not derived from Wispr Flow's or any other app's mark.
+- `Scripts/generate_icon.swift` is a standalone script (outside both Xcode
+  targets, so it isn't compiled into the app) that builds the icon as a
+  SwiftUI view and rasterizes it to a 1024×1024 PNG via `ImageRenderer`;
+  `sips` then downscales that master into the 10 sizes macOS expects
+  (16–512pt, 1x/2x) into `Scribe/Assets.xcassets/AppIcon.appiconset/`.
+- `project.yml` now sets `ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon`.
+  Since `sources: - path: Scribe` already covers anything dropped under
+  `Scribe/`, no other xcodegen changes were needed.
+- To regenerate or redesign the icon later: edit the `AppIconArtwork` view
+  in `Scripts/generate_icon.swift`, rerun it with
+  `swift Scripts/generate_icon.swift /tmp/icon-master.png`, then re-run the
+  `sips` resize loop from this phase's implementation (or write a small
+  script around it) to refresh the PNGs in `AppIcon.appiconset/`.
+
+## MVP4: background-first dictation, menu bar item, and floating overlay
+
+Turned Scribe from a window-first app into a menu bar/background-first
+dictation utility, in the spirit of background dictation utilities like
+Wispr Flow — a small always-available entry point, a global shortcut that
+never steals focus, and a minimal floating indicator instead of a window
+popping to the front. No third-party branding, assets, or exact UI was
+copied; the icon, overlay design, and copy are original.
+
+Phases:
+
+- **Phase 1–2** — Detect Fn + Espacio via local and global `NSEvent`
+  monitors (superseding the Option-only shortcut from MVP3/Phase 9 with the
+  combo already documented above).
+- **Phase 3** — Stop activating the main window on every hotkey press; see
+  "Window activation" above for the before/after. This is the behavioral
+  core of MVP4: the shortcut works identically whether Scribe's window is
+  open, minimized, or fully closed, and never interrupts whatever app the
+  user is dictating into.
+- **Phase 4** — Add a menu bar status item (`MenuBarContentView.swift`):
+  `MenuBarStatusIcon` shows a distinct SF Symbol per broad state (idle,
+  recording, busy, downloading, needs attention), and its menu offers
+  start/stop, copy last transcript, "Mostrar Scribe" (`showMainWindow()`),
+  the model folder, permission shortcuts, and quit — all routed through the
+  same `handlePrimaryDictationAction`/view-model methods the window's button
+  already uses, so there's no separate menu-bar code path to keep in sync.
+- **Phase 5** — Add the floating recording/transcribing/done overlay
+  (`RecordingOverlayController.swift`, `RecordingOverlayView.swift`): a
+  borderless, non-activating `NSPanel` shown via `orderFrontRegardless()`
+  (never `orderFront`/`makeKey`, which would steal focus), driven purely by
+  a computed `overlayPhase` on `DictationViewModel` so it can't fall out of
+  sync with the rest of the app's state. A dedicated one-shot
+  `lastTranscriptionOutcome` signal (cleared at the start of every
+  recording) distinguishes "a transcription just finished successfully" —
+  worth a brief "Listo" flash — from any other idle moment, like the app
+  launching with a previously restored transcript still on screen.
+- **Phase 6** — Visual polish: split the menu bar icon's "downloading model"
+  case into its own symbol instead of sharing the idle waveform, added a
+  short fade in/out to the overlay panel instead of an abrupt
+  show/hide, and swept the app's copy for a stray non-ASCII ellipsis (the
+  rest of the app's copy always uses literal "...").
+
+Remaining risks:
+
+- The overlay only supports `NSScreen.main`; see "Known limitations" above.
+- The menu bar icon's state grouping is coarser than `PrimaryState`
+  (several states share one symbol) — deliberately, since finer-grained
+  distinctions aren't legible at menu-bar icon size.
+
 ## Next steps (out of scope for this version)
 
 Tentative roadmap, in priority order:
@@ -564,12 +770,11 @@ Tentative roadmap, in priority order:
   app was active before the shortcut was pressed (the global Fn + Espacio
   shortcut itself, its permission UX, and window activation are already
   implemented).
-- **MVP4** — Menu bar icon (menu bar extra) as an alternative way to use the
-  app, without depending on the main window.
 - **MVP5** — Live transcription while recording, instead of waiting for
   "Detener".
 - **MVP6** — History of past transcriptions (today only the last one is
   persisted).
 - **MVP7** — Model selector (choose between Whisper variants depending on
-  the speed/accuracy trade-off each user prefers) and cleanup ahead of
-  eventual distribution (custom app icon, etc.).
+  the speed/accuracy trade-off each user prefers) and remaining cleanup
+  ahead of distribution (notarization, DMG/installer, etc. — the app icon
+  itself is already done, see "Phase 12").

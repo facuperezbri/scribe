@@ -16,7 +16,9 @@ struct MenuBarStatusIcon: View {
             return "ellipsis.circle"
         case .microphoneDenied, .missingModel, .accessibilityRequired, .error:
             return "exclamationmark.circle"
-        case .ready, .transcriptReady, .downloadingModel:
+        case .downloadingModel:
+            return "arrow.down.circle"
+        case .ready, .transcriptReady:
             return "waveform"
         }
     }

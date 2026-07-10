@@ -23,7 +23,7 @@ struct RecordingOverlayView: View {
         case .recording:
             return "Grabando \(formattedElapsed)"
         case .transcribing:
-            return "Transcribiendo…"
+            return "Transcribiendo..."
         case .done:
             return "Listo"
         }
