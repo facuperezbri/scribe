@@ -151,11 +151,12 @@ final class DictationViewModel: ObservableObject {
         // detener. `try?` porque el registro
         // puede fallar sin permiso de Accesibilidad (ver `LiveGlobalHotkeyService`); eso no debe
         // impedir que el resto de la app arranque, y el monitor queda instalado igual para cuando
-        // el permiso se otorgue. Fase 7: primero se pide traer la ventana al frente y después se
-        // dispara la acción de siempre — en ese orden, para que la confirmación de reemplazar/
-        // borrar transcripción (si corresponde) aparezca en una ventana ya visible.
+        // el permiso se otorgue. Fase 3 de MVP4: ya no se llama a `windowActivationService.
+        // activateMainWindow()` acá — el atajo pasó a ser "background-first" (como Wispr Flow):
+        // grabar/detener no debe robarle el foco a la app en la que está el usuario. Traer la
+        // ventana al frente queda reservado para una acción explícita del usuario (p. ej. "Mostrar
+        // Scribe" del menú de la barra de menús, Fase 4), no para cada presión del atajo.
         try? self.globalHotkeyService.start { [weak self] in
-            self?.windowActivationService.activateMainWindow()
             self?.handlePrimaryDictationAction(source: .globalHotkey)
         }
         hotkeyStatus = self.globalHotkeyService.currentStatus()

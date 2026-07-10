@@ -1,10 +1,14 @@
 import XCTest
 @testable import Scribe
 
-/// Cubre que el atajo global pide activar la ventana principal antes de disparar el flujo
-/// centralizado de siempre (Fase 7 de MVP3), a través de `FakeWindowActivationService` — sin
-/// depender de `NSApplication`/`NSWindow` reales, que no se pueden controlar de forma confiable en
-/// un test unitario.
+/// Cubre que el atajo global (Fase 3 de MVP4) ya NO pide activar la ventana principal antes de
+/// disparar el flujo centralizado de siempre — el atajo pasó a ser "background-first": grabar/
+/// detener no debe traer a Scribe al frente ni robarle el foco a la app en la que está el usuario.
+/// `WindowActivationServicing` sigue existiendo y conectado (vía `registerWindowReopenHandler`)
+/// para una acción explícita futura (p. ej. "Mostrar Scribe" del menú de la barra de menús, Fase
+/// 4), por eso se sigue probando a través de `FakeWindowActivationService` — sin depender de
+/// `NSApplication`/`NSWindow` reales, que no se pueden controlar de forma confiable en un test
+/// unitario.
 @MainActor
 final class WindowActivationServiceTests: XCTestCase {
     private func makeViewModel(
@@ -32,35 +36,10 @@ final class WindowActivationServiceTests: XCTestCase {
         )
     }
 
-    func testHotkeyPressRequestsWindowActivation() async {
-        let hotkeyService = FakeGlobalHotkeyService()
-        let windowActivationService = FakeWindowActivationService()
-        let viewModel = makeViewModel(hotkeyService: hotkeyService, windowActivationService: windowActivationService)
-        _ = viewModel
-
-        hotkeyService.simulateHotkeyPressed()
-        try? await Task.sleep(for: .milliseconds(50))
-
-        XCTAssertEqual(windowActivationService.activateMainWindowCallCount, 1)
-    }
-
-    /// El botón de la UI no necesita traer la app al frente: ya está al frente porque el usuario
-    /// lo tocó con el mouse. Solo el atajo global (que puede venir de cualquier otra app) lo pide.
-    func testUserInterfaceButtonDoesNotRequestWindowActivation() async {
-        let hotkeyService = FakeGlobalHotkeyService()
-        let windowActivationService = FakeWindowActivationService()
-        let viewModel = makeViewModel(hotkeyService: hotkeyService, windowActivationService: windowActivationService)
-
-        viewModel.handlePrimaryDictationAction(source: .userInterface)
-        try? await Task.sleep(for: .milliseconds(50))
-
-        XCTAssertEqual(windowActivationService.activateMainWindowCallCount, 0)
-        XCTAssertEqual(viewModel.state.session, .recording)
-    }
-
-    /// La activación de ventana no reemplaza el flujo centralizado: la primera presión sigue
-    /// arrancando la grabación a través del mismo `handlePrimaryDictationAction`.
-    func testHotkeyStillUsesCentralizedWorkflowAfterRequestingActivation() async {
+    /// Regla central de la Fase 3 de MVP4: presionar el atajo arranca a grabar a través del mismo
+    /// `handlePrimaryDictationAction` de siempre, pero sin pedirle nunca a `WindowActivationServicing`
+    /// que traiga la ventana al frente.
+    func testHotkeyPressDoesNotActivateMainWindowButStillStartsRecording() async {
         let hotkeyService = FakeGlobalHotkeyService()
         let windowActivationService = FakeWindowActivationService()
         let audioRecorder = FakeAudioRecordingService()
@@ -73,14 +52,29 @@ final class WindowActivationServiceTests: XCTestCase {
         hotkeyService.simulateHotkeyPressed()
         try? await Task.sleep(for: .milliseconds(50))
 
-        XCTAssertEqual(windowActivationService.activateMainWindowCallCount, 1)
+        XCTAssertEqual(windowActivationService.activateMainWindowCallCount, 0)
         XCTAssertEqual(audioRecorder.startRecordingCallCount, 1)
         XCTAssertEqual(viewModel.state.session, .recording)
     }
 
-    /// Mientras se transcribe, el atajo sigue pidiendo traer la ventana al frente, pero no arranca
-    /// una grabación nueva ni cancela la transcripción en curso.
-    func testHotkeyWhileTranscribingRequestsActivationButDoesNotStartNewRecording() async {
+    /// El botón de la UI tampoco activa la ventana — ya estaba al frente porque el usuario lo
+    /// tocó con el mouse. Ninguno de los dos orígenes de `handlePrimaryDictationAction` debe
+    /// activar la ventana automáticamente.
+    func testUserInterfaceButtonDoesNotActivateMainWindow() async {
+        let hotkeyService = FakeGlobalHotkeyService()
+        let windowActivationService = FakeWindowActivationService()
+        let viewModel = makeViewModel(hotkeyService: hotkeyService, windowActivationService: windowActivationService)
+
+        viewModel.handlePrimaryDictationAction(source: .userInterface)
+        try? await Task.sleep(for: .milliseconds(50))
+
+        XCTAssertEqual(windowActivationService.activateMainWindowCallCount, 0)
+        XCTAssertEqual(viewModel.state.session, .recording)
+    }
+
+    /// Mientras se transcribe, presiones repetidas del atajo siguen sin activar la ventana ni
+    /// arrancar una grabación nueva ni cancelar la transcripción en curso.
+    func testHotkeyWhileTranscribingDoesNotActivateWindowOrStartNewRecording() async {
         let hotkeyService = FakeGlobalHotkeyService()
         let windowActivationService = FakeWindowActivationService()
         let audioRecorder = FakeAudioRecordingService()
@@ -102,14 +96,14 @@ final class WindowActivationServiceTests: XCTestCase {
         hotkeyService.simulateHotkeyPressed()
         try? await Task.sleep(for: .milliseconds(50))
 
-        XCTAssertEqual(windowActivationService.activateMainWindowCallCount, 3)
+        XCTAssertEqual(windowActivationService.activateMainWindowCallCount, 0)
         XCTAssertEqual(audioRecorder.startRecordingCallCount, 1)
         XCTAssertEqual(viewModel.state.session, .transcribing)
     }
 
-    /// Con una transcripción previa no vacía, el atajo pide activar la ventana y dispara la misma
-    /// confirmación que el botón, en vez de grabar directamente.
-    func testHotkeyWithNonEmptyTranscriptRequestsActivationAndTriggersConfirmation() {
+    /// Con una transcripción previa no vacía, el atajo la reemplaza y arranca a grabar directo
+    /// (igual que el botón, sin confirmación bloqueante), y sigue sin activar la ventana.
+    func testHotkeyWithNonEmptyTranscriptDoesNotActivateWindowAndStartsRecordingImmediately() async {
         let hotkeyService = FakeGlobalHotkeyService()
         let windowActivationService = FakeWindowActivationService()
         let audioRecorder = FakeAudioRecordingService()
@@ -121,16 +115,17 @@ final class WindowActivationServiceTests: XCTestCase {
         viewModel.transcript = "transcripción anterior"
 
         hotkeyService.simulateHotkeyPressed()
+        try? await Task.sleep(for: .milliseconds(50))
 
-        XCTAssertEqual(windowActivationService.activateMainWindowCallCount, 1)
-        XCTAssertEqual(viewModel.pendingConfirmation, .replaceTranscript)
-        XCTAssertEqual(audioRecorder.startRecordingCallCount, 0)
+        XCTAssertEqual(windowActivationService.activateMainWindowCallCount, 0)
+        XCTAssertNil(viewModel.pendingConfirmation)
+        XCTAssertEqual(audioRecorder.startRecordingCallCount, 1)
+        XCTAssertEqual(viewModel.state.session, .recording)
     }
 
-    /// Presiones repetidas del atajo mientras hay una confirmación pendiente siguen pidiendo
-    /// activar la ventana (es idempotente, sin efecto visible más allá de traerla al frente), pero
-    /// no apilan una segunda confirmación ni arrancan una grabación.
-    func testRepeatedHotkeyPressesDoNotDuplicateThePendingAction() {
+    /// Presiones repetidas del atajo mientras se está grabando no activan la ventana ni arrancan
+    /// una segunda grabación.
+    func testRepeatedHotkeyPressesDoNotActivateWindowOrStartASecondRecording() async {
         let hotkeyService = FakeGlobalHotkeyService()
         let windowActivationService = FakeWindowActivationService()
         let audioRecorder = FakeAudioRecordingService()
@@ -144,14 +139,17 @@ final class WindowActivationServiceTests: XCTestCase {
         hotkeyService.simulateHotkeyPressed()
         hotkeyService.simulateHotkeyPressed()
         hotkeyService.simulateHotkeyPressed()
+        try? await Task.sleep(for: .milliseconds(50))
 
-        XCTAssertEqual(windowActivationService.activateMainWindowCallCount, 3)
-        XCTAssertEqual(viewModel.pendingConfirmation, .replaceTranscript)
-        XCTAssertEqual(audioRecorder.startRecordingCallCount, 0)
+        XCTAssertEqual(windowActivationService.activateMainWindowCallCount, 0)
+        XCTAssertNil(viewModel.pendingConfirmation)
+        XCTAssertEqual(audioRecorder.startRecordingCallCount, 1)
+        XCTAssertEqual(viewModel.state.session, .recording)
     }
 
-    /// `registerWindowReopenHandler` es un simple puente hacia el servicio inyectado: no decide
-    /// nada por su cuenta, solo lo reenvía.
+    /// `registerWindowReopenHandler` sigue siendo un simple puente hacia el servicio inyectado:
+    /// no decide nada por su cuenta, solo lo reenvía. Sigue vivo para que una acción explícita
+    /// futura (Fase 4) pueda apoyarse en él sin que `DictationViewModel` conozca `NSWindow`.
     func testRegisterWindowReopenHandlerForwardsToTheInjectedService() {
         let hotkeyService = FakeGlobalHotkeyService()
         let windowActivationService = FakeWindowActivationService()
