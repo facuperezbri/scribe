@@ -142,3 +142,16 @@ final class FakeGlobalHotkeyService: GlobalHotkeyServicing {
         onHotkeyPressed?()
     }
 }
+
+final class FakeWindowActivationService: WindowActivationServicing {
+    private(set) var activateMainWindowCallCount = 0
+    private(set) var reopenHandler: (() -> Void)?
+
+    func activateMainWindow() {
+        activateMainWindowCallCount += 1
+    }
+
+    func registerReopenHandler(_ handler: @escaping () -> Void) {
+        reopenHandler = handler
+    }
+}

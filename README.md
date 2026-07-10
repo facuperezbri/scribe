@@ -79,9 +79,12 @@ xcodebuild -project Scribe.xcodeproj -scheme Scribe \
 5. Once the model is installed, "Ver en Finder" opens the folder where it
    lives on disk.
 6. Pressing Option alone (with no other key) anywhere in macOS — not just
-   with Scribe's window focused — starts recording; pressing Option again
-   stops it and starts transcription, exactly as if the "Grabar"/"Detener"
-   button had been pressed. Holding Option down doesn't repeat-trigger it.
+   with Scribe's window focused — brings Scribe to the front and starts
+   recording; pressing Option again stops it and starts transcription,
+   exactly as if the "Grabar"/"Detener" button had been pressed. Holding
+   Option down doesn't repeat-trigger it. If Scribe's window is minimized,
+   it's unminimized; if it was closed while the app kept running, pressing
+   Option reopens it.
 
 ### Global Option shortcut and Accessibility permission
 
@@ -104,13 +107,47 @@ whenever the app becomes active again (e.g. after returning from System
 Settings). Missing this permission is non-fatal: the record/stop button in
 the main window always works regardless of it.
 
+Pressing Option also brings Scribe's window to the front, regardless of
+which app currently has focus — see "Window activation" below.
+
+### Window activation
+
+When the global Option shortcut fires, `DictationViewModel` first asks
+`WindowActivationServicing` to activate the app and bring its window to the
+front, then runs the same `handlePrimaryDictationAction` the button uses —
+so pressing Option always shows Scribe before deciding whether to record,
+show the replace/clear confirmation, or just keep showing the transcribing
+state. The click-driven button path never calls this, since the window is
+already the one the user just clicked in.
+
+`LiveWindowActivationService` (`Scribe/WindowActivationService.swift`) calls
+`NSApplication.shared.activate(ignoringOtherApps: true)`, unhides the app if
+hidden, and deminiaturizes the window if it was minimized. `DictationViewModel`
+now lives in `AppDelegate` (`Scribe/AppDelegate.swift`), not as `ContentView`'s
+`@StateObject`: closing the window used to deallocate the view model along
+with it, which silently killed the global Option monitor (it captures `self`
+as `weak`) until the app was relaunched. Owning it at the app level keeps the
+monitor alive for as long as the app is running, independent of whether the
+window is open, minimized, or closed.
+
+If the window was closed entirely (no `NSWindow` left to reactivate),
+`LiveWindowActivationService` falls back to a `reopenHandler` closure that
+`ScribeApp` registers once, at launch, wrapping SwiftUI's
+`@Environment(\.openWindow)` action for the `WindowGroup(id: "main")` scene.
+Because it's a singleton `WindowGroup` (no associated per-window data type),
+calling `openWindow(id:)` while a window already exists just brings that
+window forward instead of creating a second one, so repeated Option presses
+never produce duplicate windows.
+
 ## Architecture
 
 | File | Responsibility |
 |---|---|
-| `ScribeApp.swift` | App entry point (`WindowGroup`). |
+| `ScribeApp.swift` | App entry point (`WindowGroup`) and the `openWindow` bridge for reopening a closed window. |
+| `AppDelegate.swift` | Owns the single long-lived `DictationViewModel`, independent of window lifecycle. |
 | `ContentView.swift` | Main SwiftUI layout and confirmation dialogs. |
 | `DictationViewModel.swift` | App state and orchestration between services. |
+| `WindowActivationService.swift` | Brings Scribe's window to the front (`WindowActivationServicing`) when the global shortcut fires. |
 | `RecordingButton.swift` | Main Record/Stop button. |
 | `RecordingFeedbackView.swift` | Elapsed time, level meter, and duration warnings while recording. |
 | `TranscribingFeedbackView.swift` | Progress indicator and cancel button while transcribing. |
@@ -353,11 +390,6 @@ Implementation notes:
 
 Remaining risks:
 
-- `pendingConfirmation` (replace/clear transcript) is resolved through a
-  SwiftUI alert bound to the main window. If the shortcut fires while that
-  alert is pending, or while the app is backgrounded/windowless, the
-  confirmation still needs the window to be visible for the user to respond
-  to it — untested end-to-end outside of a focused window.
 - Audio interruption handling (see "Error handling") reverts to `.idle` and
   sets a typed error, but there's no menu bar icon or notification yet to
   surface that to a user who triggered the whole flow via keyboard only.
@@ -366,13 +398,35 @@ Remaining risks:
   Accessibility permission") still needs a Mac with GUI/Accessibility access
   to fully exercise — automated tests only cover it through fakes.
 
+## Phase 7: window activation and app focus
+
+Pressing Option no longer just toggles recording — it also brings Scribe's
+window to the front first, from any app, so the confirmation dialog (replace/
+clear transcript) and the recording/transcribing feedback are always visible
+to the user who just triggered them. See "Window activation" under
+Architecture for the implementation (`WindowActivationServicing`,
+`AppDelegate` owning `DictationViewModel`, the `openWindow` reopen bridge).
+
+This closed the risk noted above in MVP3's "Remaining risks": the
+replace/clear-transcript confirmation used to need the window already
+visible to be answerable; now the shortcut guarantees that before the
+confirmation can even appear.
+
+Known limitation: reopening a fully-closed window depends on SwiftUI's
+`openWindow(id:)` bridge being registered by `ContentView`'s `onAppear`
+before the window is closed. Since that only runs once the window has
+appeared at least once, this is reliable for the normal case (app launched
+normally, window closed later) but hasn't been exercised for exotic startup
+states (e.g. the window failing to open at all on first launch).
+
 ## Next steps (out of scope for this version)
 
 Tentative roadmap, in priority order:
 
 - **MVP3** — Automatic pasting of the transcription result into whichever
   app was active before the shortcut was pressed (the global Option
-  shortcut itself, and its permission UX, are already implemented).
+  shortcut itself, its permission UX, and window activation are already
+  implemented).
 - **MVP4** — Menu bar icon (menu bar extra) as an alternative way to use the
   app, without depending on the main window.
 - **MVP5** — Live transcription while recording, instead of waiting for

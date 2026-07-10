@@ -74,6 +74,7 @@ final class DictationViewModel: ObservableObject {
     private let clipboardService: ClipboardServicing
     private let transcriptStore: TranscriptStoring
     private let globalHotkeyService: GlobalHotkeyServicing
+    private let windowActivationService: WindowActivationServicing
     private(set) var lastRecordingURL: URL?
     private var meterTask: Task<Void, Never>?
     private var transcriptionTask: Task<Void, Never>?
@@ -98,6 +99,7 @@ final class DictationViewModel: ObservableObject {
         clipboardService: ClipboardServicing = ClipboardService(),
         transcriptStore: TranscriptStoring = FileTranscriptStore(),
         globalHotkeyService: GlobalHotkeyServicing = LiveGlobalHotkeyService(),
+        windowActivationService: WindowActivationServicing = LiveWindowActivationService(),
         transcriptionService: TranscriptionServicing? = nil
     ) {
         self.audioRecorder = audioRecorder
@@ -106,6 +108,7 @@ final class DictationViewModel: ObservableObject {
         self.clipboardService = clipboardService
         self.transcriptStore = transcriptStore
         self.globalHotkeyService = globalHotkeyService
+        self.windowActivationService = windowActivationService
         self.transcriptionService = transcriptionService ?? TranscriptionService(modelManager: modelManager)
 
         state = AppState(permission: .notDetermined, model: .missing, session: .idle, error: nil)
@@ -127,8 +130,11 @@ final class DictationViewModel: ObservableObject {
         // usa el botón de la UI, sin duplicar lógica de grabar/detener. `try?` porque el registro
         // puede fallar sin permiso de Accesibilidad (ver `LiveGlobalHotkeyService`); eso no debe
         // impedir que el resto de la app arranque, y el monitor queda instalado igual para cuando
-        // el permiso se otorgue.
+        // el permiso se otorgue. Fase 7: primero se pide traer la ventana al frente y después se
+        // dispara la acción de siempre — en ese orden, para que la confirmación de reemplazar/
+        // borrar transcripción (si corresponde) aparezca en una ventana ya visible.
         try? self.globalHotkeyService.start { [weak self] in
+            self?.windowActivationService.activateMainWindow()
             self?.handlePrimaryDictationAction(source: .globalHotkey)
         }
         hotkeyStatus = self.globalHotkeyService.currentStatus()
@@ -349,6 +355,14 @@ final class DictationViewModel: ObservableObject {
     /// botón explícito ("Revisar permiso") para el mismo efecto.
     func refreshHotkeyStatus() {
         hotkeyStatus = globalHotkeyService.currentStatus()
+    }
+
+    /// Conecta la acción `openWindow` de SwiftUI con `WindowActivationServicing` (Fase 7 de
+    /// MVP3), para el caso en que el atajo global se presiona después de que el usuario cerró la
+    /// ventana principal del todo. `ContentView` llama esto una sola vez al aparecer, porque un
+    /// servicio plano fuera de la jerarquía de vistas no tiene `@Environment` propio.
+    func registerWindowReopenHandler(_ handler: @escaping () -> Void) {
+        windowActivationService.registerReopenHandler(handler)
     }
 
     private func beginRecording() {

@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct ContentView: View {
-    @StateObject private var viewModel = DictationViewModel()
+    @ObservedObject var viewModel: DictationViewModel
     @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
@@ -135,5 +135,5 @@ struct ContentView: View {
 }
 
 #Preview {
-    ContentView()
+    ContentView(viewModel: DictationViewModel())
 }
