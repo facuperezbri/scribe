@@ -22,6 +22,30 @@ enum DictationSessionState: Equatable {
     case transcribing
 }
 
+/// Resultado del intento de transcripción más reciente (Fase 5 de MVP4), para que el overlay
+/// flotante sepa si el paso a `.idle` que sigue a `.transcribing` fue un éxito (mostrar "Listo"
+/// brevemente) o un fracaso/cancelación (ocultarse sin más, sin mostrar nada erróneo como si
+/// hubiera terminado bien). `state.error` no alcanza por sí solo: distingue "hay un error" de
+/// "no hay error", pero no distingue "recién terminó bien" de "está en reposo desde antes" (por
+/// ejemplo, al abrir la app con una transcripción restaurada). Se limpia al arrancar la próxima
+/// grabación (`startRecordingIfPossible()`), para que el overlay no reabra un "Listo" viejo.
+enum TranscriptionOutcome: Equatable {
+    case success
+    case failure
+    case cancelled
+}
+
+/// Fase de la burbuja flotante no intrusiva (Fase 5 de MVP4). Deliberadamente más angosta que
+/// `PrimaryState`: la burbuja no existe para reflejar todo el estado de la app (eso ya lo hace la
+/// ventana principal y el ítem de la barra de menús), solo para acompañar sin robar foco mientras
+/// se graba/transcribe, y confirmar brevemente que terminó bien.
+enum RecordingOverlayPhase: Equatable {
+    case hidden
+    case recording
+    case transcribing
+    case done
+}
+
 /// Estado completo de la app, separado en dimensiones independientes (permiso de micrófono,
 /// modelo, sesión de dictado, error) en vez de un único enum plano que mezclaba las cuatro
 /// cosas en un solo caso por vez.
@@ -88,6 +112,7 @@ final class DictationViewModel: ObservableObject {
     @Published var recordingElapsed: TimeInterval = 0
     @Published var inputLevel: Float = 0
     @Published var hotkeyStatus: HotkeyStatus = .unknown
+    @Published private(set) var lastTranscriptionOutcome: TranscriptionOutcome?
 
     private let audioRecorder: AudioRecordingServicing
     private let transcriptionService: TranscriptionServicing
@@ -307,6 +332,23 @@ final class DictationViewModel: ObservableObject {
         return .ready
     }
 
+    /// Fase de la burbuja flotante (Fase 5 de MVP4): a diferencia de `primaryState`, no le
+    /// importan permiso/modelo/Accesibilidad ni la transcripción en sí — solo grabar/transcribir
+    /// y el instante posterior al éxito (`.done`, breve, para mostrar "Listo" y desaparecer).
+    /// `lastTranscriptionOutcome` es lo que distingue ese instante de un reposo cualquiera (por
+    /// ejemplo, al abrir la app con una transcripción restaurada, donde no corresponde mostrar
+    /// nada): se limpia al arrancar la próxima grabación, así que `.done` no reaparece solo.
+    var overlayPhase: RecordingOverlayPhase {
+        switch state.session {
+        case .recording:
+            return .recording
+        case .transcribing:
+            return .transcribing
+        case .idle, .requestingPermission, .startingRecording, .stoppingRecording:
+            return lastTranscriptionOutcome == .success ? .done : .hidden
+        }
+    }
+
     var primaryStateTitle: String {
         switch primaryState {
         case .ready: return "Listo para dictar"
@@ -382,6 +424,7 @@ final class DictationViewModel: ObservableObject {
 
     private func startRecordingIfPossible() {
         state.session = .startingRecording
+        lastTranscriptionOutcome = nil
         Task {
             await startRecordingFlow()
         }
@@ -506,6 +549,7 @@ final class DictationViewModel: ObservableObject {
         transcriptionTask = nil
         state = steadyState()
         statusText = "Transcripción cancelada."
+        lastTranscriptionOutcome = .cancelled
     }
 
     /// Actualiza tiempo transcurrido y nivel de entrada cada 200ms mientras se graba. Vive en
@@ -567,12 +611,14 @@ final class DictationViewModel: ObservableObject {
             // acumulándose en disco más allá de lo necesario.
             audioRecorder.deleteCurrentFile()
             lastRecordingURL = nil
+            lastTranscriptionOutcome = .success
         } catch {
             guard currentTranscriptionAttempt == attemptID else { return }
             let appError = AppError(category: .transcription, underlying: error)
             state.session = .idle
             state.error = appError
             statusText = appError.message
+            lastTranscriptionOutcome = .failure
         }
         transcriptionTask = nil
     }

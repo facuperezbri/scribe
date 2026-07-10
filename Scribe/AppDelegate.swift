@@ -9,4 +9,12 @@ import AppKit
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
     let dictationViewModel = DictationViewModel()
+    /// Burbuja flotante de grabación/transcripción (Fase 5 de MVP4). Se crea recién en
+    /// `applicationDidFinishLaunching` porque necesita referenciar `dictationViewModel` en su
+    /// inicializador, y una propiedad `let` con valor por defecto no puede leer `self` todavía.
+    private var recordingOverlayController: RecordingOverlayController?
+
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        recordingOverlayController = RecordingOverlayController(viewModel: dictationViewModel)
+    }
 }
