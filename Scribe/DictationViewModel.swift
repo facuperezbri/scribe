@@ -46,12 +46,14 @@ enum PendingConfirmation: Equatable {
     case clearTranscript
 }
 
-/// Origen de una acción de grabar/detener. Hoy solo existe `.userInterface`; `.globalHotkey`
-/// queda reservado para cuando MVP3 agregue el atajo global, que deberá invocar
-/// `handlePrimaryDictationAction(source: .globalHotkey)` en vez de duplicar esta lógica.
+/// Origen de una acción de grabar/detener: la ventana principal (`.userInterface`), el atajo
+/// global de teclado (`.globalHotkey`) o el ítem "Iniciar dictado"/"Detener dictado" de la barra
+/// de menús (`.menuBar`, Fase 4 de MVP4). Los tres invocan exactamente `handlePrimaryDictationAction`
+/// en vez de duplicar la lógica de grabar/detener/transcribir.
 enum DictationActionSource: Equatable {
     case userInterface
     case globalHotkey
+    case menuBar
 }
 
 /// Estado "grande" que ve el usuario en el área central de la ventana compacta (Fase 8),
@@ -442,6 +444,13 @@ final class DictationViewModel: ObservableObject {
     /// servicio plano fuera de la jerarquía de vistas no tiene `@Environment` propio.
     func registerWindowReopenHandler(_ handler: @escaping () -> Void) {
         windowActivationService.registerReopenHandler(handler)
+    }
+
+    /// Trae la ventana principal al frente de forma explícita (Fase 4 de MVP4): ahora que el
+    /// atajo global ya no lo hace por su cuenta (Fase 3), esta es la única vía prevista para
+    /// mostrarla bajo demanda — hoy la usa "Mostrar Scribe" del menú de la barra de menús.
+    func showMainWindow() {
+        windowActivationService.activateMainWindow()
     }
 
     private func beginRecording() {

@@ -15,5 +15,16 @@ struct ScribeApp: App {
                 }
         }
         .windowResizability(.contentSize)
+
+        // Fase 4 de MVP4: ítem de la barra de menús para usar Scribe como utilitario en
+        // background, sin depender de que la ventana principal esté abierta.
+        MenuBarExtra {
+            MenuBarContentView(
+                viewModel: appDelegate.dictationViewModel,
+                onShowMainWindow: appDelegate.dictationViewModel.showMainWindow
+            )
+        } label: {
+            MenuBarStatusIcon(viewModel: appDelegate.dictationViewModel)
+        }
     }
 }

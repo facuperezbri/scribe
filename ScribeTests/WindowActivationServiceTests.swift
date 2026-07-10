@@ -4,11 +4,12 @@ import XCTest
 /// Cubre que el atajo global (Fase 3 de MVP4) ya NO pide activar la ventana principal antes de
 /// disparar el flujo centralizado de siempre — el atajo pasó a ser "background-first": grabar/
 /// detener no debe traer a Scribe al frente ni robarle el foco a la app en la que está el usuario.
-/// `WindowActivationServicing` sigue existiendo y conectado (vía `registerWindowReopenHandler`)
-/// para una acción explícita futura (p. ej. "Mostrar Scribe" del menú de la barra de menús, Fase
-/// 4), por eso se sigue probando a través de `FakeWindowActivationService` — sin depender de
-/// `NSApplication`/`NSWindow` reales, que no se pueden controlar de forma confiable en un test
-/// unitario.
+/// Lo mismo aplica al ítem "Iniciar dictado"/"Detener dictado" del menú de la barra de menús
+/// (`.menuBar`, Fase 4): el menú ya está visible, así que tampoco activa la ventana. La única vía
+/// que sí la activa es `showMainWindow()` (Fase 4), que respalda "Mostrar Scribe" del menú.
+/// `WindowActivationServicing` se sigue probando a través de `FakeWindowActivationService` — sin
+/// depender de `NSApplication`/`NSWindow` reales, que no se pueden controlar de forma confiable en
+/// un test unitario.
 @MainActor
 final class WindowActivationServiceTests: XCTestCase {
     private func makeViewModel(
@@ -143,6 +144,40 @@ final class WindowActivationServiceTests: XCTestCase {
 
         XCTAssertEqual(windowActivationService.activateMainWindowCallCount, 0)
         XCTAssertNil(viewModel.pendingConfirmation)
+        XCTAssertEqual(audioRecorder.startRecordingCallCount, 1)
+        XCTAssertEqual(viewModel.state.session, .recording)
+    }
+
+    /// "Mostrar Scribe" del menú de la barra de menús (Fase 4) es hoy la única acción prevista
+    /// que activa la ventana principal — `showMainWindow()` es un simple puente hacia el
+    /// servicio inyectado, igual que `registerWindowReopenHandler`.
+    func testShowMainWindowActivatesTheWindow() {
+        let hotkeyService = FakeGlobalHotkeyService()
+        let windowActivationService = FakeWindowActivationService()
+        let viewModel = makeViewModel(hotkeyService: hotkeyService, windowActivationService: windowActivationService)
+
+        viewModel.showMainWindow()
+
+        XCTAssertEqual(windowActivationService.activateMainWindowCallCount, 1)
+    }
+
+    /// El origen `.menuBar` (Fase 4) es otro punto de entrada al mismo flujo centralizado que
+    /// `.userInterface`/`.globalHotkey`, y tampoco activa la ventana por su cuenta: el menú ya
+    /// está visible, así que no hace falta traer la ventana principal al frente para grabar.
+    func testMenuBarActionDoesNotActivateMainWindowButStillStartsRecording() async {
+        let hotkeyService = FakeGlobalHotkeyService()
+        let windowActivationService = FakeWindowActivationService()
+        let audioRecorder = FakeAudioRecordingService()
+        let viewModel = makeViewModel(
+            hotkeyService: hotkeyService,
+            windowActivationService: windowActivationService,
+            audioRecorder: audioRecorder
+        )
+
+        viewModel.handlePrimaryDictationAction(source: .menuBar)
+        try? await Task.sleep(for: .milliseconds(50))
+
+        XCTAssertEqual(windowActivationService.activateMainWindowCallCount, 0)
         XCTAssertEqual(audioRecorder.startRecordingCallCount, 1)
         XCTAssertEqual(viewModel.state.session, .recording)
     }
