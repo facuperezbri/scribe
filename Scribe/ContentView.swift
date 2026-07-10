@@ -5,21 +5,22 @@ struct ContentView: View {
     @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
-        VStack(spacing: 18) {
-            VStack(spacing: 2) {
-                HStack(spacing: 6) {
-                    Image(systemName: "waveform")
-                        .foregroundStyle(Color.accentColor)
-                    Text("Scribe")
-                        .font(.title2)
-                        .fontWeight(.bold)
-                }
-                Text("Dictado local para prompts e ideas")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
+        VStack(spacing: 14) {
+            ScribeHeaderView()
 
-            StatusBadgeView(text: viewModel.statusText, kind: viewModel.statusKind)
+            DictationStatusView(
+                primaryState: viewModel.primaryState,
+                title: viewModel.primaryStateTitle,
+                hint: viewModel.primaryStateHint,
+                elapsed: viewModel.recordingElapsed,
+                inputLevel: viewModel.inputLevel,
+                warningText: viewModel.recordingWarningText,
+                isStrongWarning: viewModel.isStrongRecordingWarning,
+                onCancelTranscribing: viewModel.cancelTranscription,
+                showCopyCallToAction: viewModel.showCopyCallToAction,
+                showCopiedFeedback: viewModel.showCopiedFeedback,
+                onCopy: viewModel.copyTranscript
+            )
 
             RecordingButton(
                 isRecording: viewModel.isRecording,
@@ -27,19 +28,6 @@ struct ContentView: View {
                 title: viewModel.recordButtonTitle,
                 action: { viewModel.handlePrimaryDictationAction() }
             )
-
-            if viewModel.isRecording {
-                RecordingFeedbackView(
-                    elapsed: viewModel.recordingElapsed,
-                    inputLevel: viewModel.inputLevel,
-                    warningText: viewModel.recordingWarningText,
-                    isStrongWarning: viewModel.isStrongRecordingWarning
-                )
-            }
-
-            if viewModel.isTranscribing {
-                TranscribingFeedbackView(onCancel: viewModel.cancelTranscription)
-            }
 
             if viewModel.isMicrophonePermissionDenied {
                 Button("Abrir Ajustes del Sistema", action: viewModel.openMicrophonePrivacySettings)
@@ -52,16 +40,16 @@ struct ContentView: View {
             HStack(spacing: 12) {
                 Button(viewModel.showCopiedFeedback ? "Copiado" : "Copiar", action: viewModel.copyTranscript)
                     .buttonStyle(.bordered)
+                    .controlSize(.small)
                     .disabled(viewModel.transcript.isEmpty)
 
                 Button("Limpiar", action: viewModel.clearTranscript)
                     .buttonStyle(.bordered)
+                    .controlSize(.small)
                     .disabled(viewModel.transcript.isEmpty || viewModel.isBusy)
             }
 
-            Divider()
-
-            VStack(spacing: 8) {
+            VStack(spacing: 6) {
                 ModelStatusView(
                     isInstalled: viewModel.isModelInstalled,
                     modelName: ModelManager.modelDisplayName,
@@ -81,8 +69,8 @@ struct ContentView: View {
                 PrivacyNoteView()
             }
         }
-        .padding(24)
-        .frame(minWidth: 440, minHeight: 580)
+        .padding(18)
+        .frame(minWidth: 380, minHeight: 460)
         .onChange(of: scenePhase) { newPhase in
             if newPhase == .active {
                 viewModel.refreshHotkeyStatus()

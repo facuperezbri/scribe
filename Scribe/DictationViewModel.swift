@@ -54,6 +54,26 @@ enum DictationActionSource: Equatable {
     case globalHotkey
 }
 
+/// Estado "grande" que ve el usuario en el área central de la ventana compacta (Fase 8),
+/// derivado de `AppState` + transcripción + estado del atajo global. Existe separado de
+/// `statusText` (que sigue siendo el detalle chico, ad hoc por transición) porque necesita
+/// un texto fijo y predecible por caso para el título grande, sin importar en qué paso
+/// intermedio de una transición async se generó.
+enum PrimaryState: Equatable {
+    case ready
+    case startingRecording
+    case requestingPermission
+    case recording
+    case stoppingRecording
+    case transcribing
+    case transcriptReady
+    case microphoneDenied
+    case missingModel
+    case downloadingModel
+    case accessibilityRequired
+    case error(String)
+}
+
 @MainActor
 final class DictationViewModel: ObservableObject {
     @Published var state: AppState
@@ -126,8 +146,9 @@ final class DictationViewModel: ObservableObject {
             }
         }
 
-        // Conecta el atajo global (Option solo, Fase 5 de MVP3) al mismo punto de entrada que
-        // usa el botón de la UI, sin duplicar lógica de grabar/detener. `try?` porque el registro
+        // Conecta el atajo global (Fn + Espacio, Fase 9 — antes Option solo en la Fase 5 de MVP3)
+        // al mismo punto de entrada que usa el botón de la UI, sin duplicar lógica de grabar/
+        // detener. `try?` porque el registro
         // puede fallar sin permiso de Accesibilidad (ver `LiveGlobalHotkeyService`); eso no debe
         // impedir que el resto de la app arranque, y el monitor queda instalado igual para cuando
         // el permiso se otorgue. Fase 7: primero se pide traer la ventana al frente y después se
@@ -256,6 +277,63 @@ final class DictationViewModel: ObservableObject {
         state.session == .recording && recordingElapsed >= Self.strongWarningThreshold
     }
 
+    /// Resuelve el `PrimaryState` para el área central de la ventana compacta (Fase 8). El
+    /// orden importa: una sesión en curso (grabando/transcribiendo/etc.) manda siempre, porque
+    /// es la verdad más urgente y en vivo, incluso si en paralelo falta el modelo o el permiso
+    /// de Accesibilidad no está otorgado (ninguno de los dos bloquea grabar). Recién en reposo
+    /// (`.idle`) se evalúan esos bloqueos, en el mismo orden de prioridad que ya usa
+    /// `statusText(for:)`, y por último si hay accesibilidad pendiente o una transcripción para
+    /// mostrar.
+    var primaryState: PrimaryState {
+        if let error = state.error {
+            return .error(error.message)
+        }
+        switch state.session {
+        case .recording: return .recording
+        case .stoppingRecording: return .stoppingRecording
+        case .transcribing: return .transcribing
+        case .startingRecording: return .startingRecording
+        case .requestingPermission: return .requestingPermission
+        case .idle: break
+        }
+        if state.permission == .denied { return .microphoneDenied }
+        if state.model == .missing { return .missingModel }
+        if isDownloadingModel { return .downloadingModel }
+        if hotkeyStatus == .accessibilityPermissionRequired { return .accessibilityRequired }
+        if !transcript.isEmpty { return .transcriptReady }
+        return .ready
+    }
+
+    var primaryStateTitle: String {
+        switch primaryState {
+        case .ready: return "Listo para dictar"
+        case .startingRecording: return "Preparando grabación..."
+        case .requestingPermission: return "Solicitando permiso de micrófono..."
+        case .recording: return "Grabando..."
+        case .stoppingRecording: return "Deteniendo..."
+        case .transcribing: return "Transcribiendo localmente..."
+        case .transcriptReady: return "Transcripción lista"
+        case .microphoneDenied: return "Permiso de micrófono requerido"
+        case .missingModel: return "Modelo requerido"
+        case .downloadingModel: return "Descargando modelo..."
+        case .accessibilityRequired: return "Permiso de Accesibilidad requerido"
+        case .error(let message): return message
+        }
+    }
+
+    /// Pista chica bajo el título grande, solo para el estado neutral de reposo: en el resto de
+    /// los casos ya hay suficiente detalle (feedback de grabación, spinner de transcripción,
+    /// botón de copiar) como para no necesitar una segunda línea de texto.
+    var primaryStateHint: String? {
+        primaryState == .ready ? "Presioná Fn + Espacio para dictar" : nil
+    }
+
+    /// Si corresponde destacar "Copiar" como acción principal del área central, en vez de un
+    /// texto de estado sin acción asociada.
+    var showCopyCallToAction: Bool {
+        primaryState == .transcriptReady
+    }
+
     /// Punto único de entrada para una acción de grabar/detener, sin importar de dónde venga:
     /// hoy solo el botón de la UI, más adelante también el atajo de teclado global de MVP3
     /// (pasando `source: .globalHotkey`). Ambos orígenes comparten exactamente esta lógica,
@@ -342,7 +420,7 @@ final class DictationViewModel: ObservableObject {
     }
 
     /// Abre la sección de privacidad de Accesibilidad en Ajustes del Sistema (donde se habilita
-    /// Scribe para que el atajo global de Option funcione). Si el deep link no resuelve en esta
+    /// Scribe para que el atajo global de Fn + Espacio funcione). Si el deep link no resuelve en esta
     /// versión de macOS, `NSWorkspace` simplemente no abre nada; no hay fallback porque no vale
     /// la pena mantener dos textos de ayuda ligeramente distintos para ese caso borde.
     func openAccessibilityPrivacySettings() {

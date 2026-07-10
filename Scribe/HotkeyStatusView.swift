@@ -1,8 +1,9 @@
 import SwiftUI
 
-/// Estado del atajo global de Option (Fase 6 de MVP3), presentado de forma subordinada al resto
-/// de la UI — mismo lugar y estilo que `ModelStatusView`/`PrivacyNoteView`, no un banner que
-/// compita con el flujo principal de grabar/detener.
+/// Estado del atajo global de Fn + Espacio (Fase 6 de MVP3, actualizado en Fase 9), presentado de
+/// forma subordinada al resto de la UI — mismo lugar y estilo que
+/// `ModelStatusView`/`PrivacyNoteView`, no un banner que compita con el flujo principal de
+/// grabar/detener.
 struct HotkeyStatusView: View {
     let status: HotkeyStatus
     let onOpenSettings: () -> Void
@@ -16,16 +17,16 @@ struct HotkeyStatusView: View {
             HStack(spacing: 6) {
                 Image(systemName: "keyboard")
                     .foregroundStyle(.secondary)
-                Text("Atajo global: Option")
+                Text("Fn + Espacio para grabar/detener")
             }
-            .font(.caption)
+            .font(.caption2)
             .foregroundStyle(.secondary)
         case .accessibilityPermissionRequired:
             VStack(spacing: 4) {
                 HStack(spacing: 6) {
                     Image(systemName: "keyboard.badge.exclamationmark")
                         .foregroundStyle(.orange)
-                    Text("Para usar Option desde cualquier app, Scribe necesita permiso de Accesibilidad.")
+                    Text("Para usar Fn + Espacio desde cualquier app, Scribe necesita permiso de Accesibilidad.")
                         .multilineTextAlignment(.center)
                 }
                 .font(.caption)

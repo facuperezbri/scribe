@@ -14,17 +14,19 @@ enum GlobalHotkeyServiceError: LocalizedError {
         case .registrationFailed:
             return "No se pudo registrar el atajo de teclado global."
         case .accessibilityPermissionDenied:
-            return "No se pudo activar el atajo con Option. Revisá los permisos de Accesibilidad o Entrada de teclado en Ajustes del Sistema."
+            return "No se pudo activar el atajo con Fn + Espacio. Revisá el permiso de Accesibilidad en Ajustes del Sistema."
         }
     }
 }
 
 /// Estado observable del atajo global, para que la UI (Fase 6 de MVP3) pueda explicarle al
-/// usuario por qué Option no anda sin conocer nada de `NSEvent`/`AXIsProcessTrusted` por debajo.
+/// usuario por qué Fn + Espacio no anda sin conocer nada de `NSEvent`/`AXIsProcessTrusted` por
+/// debajo.
 enum HotkeyStatus: Equatable {
     /// Todavía no se llamó a `start`, o se llamó a `stop` después.
     case unknown
-    /// El monitor está instalado y la app tiene permiso de Accesibilidad: Option dispara el atajo.
+    /// El monitor está instalado y la app tiene permiso de Accesibilidad: Fn + Espacio dispara el
+    /// atajo.
     case active
     /// El monitor está instalado pero falta el permiso de Accesibilidad, así que no le llegan
     /// eventos todavía. Se resuelve solo (sin reiniciar la app) apenas el usuario otorga el
@@ -53,49 +55,63 @@ protocol GlobalHotkeyServicing {
     func currentStatus() -> HotkeyStatus
 }
 
-/// Implementación real de `GlobalHotkeyServicing`: detecta la tecla Option sola (sin ningún otro
-/// modificador) como atajo global de toggle (Fase 5 de MVP3).
+/// Implementación real de `GlobalHotkeyServicing`: detecta Fn + Espacio como atajo global de
+/// toggle (Fase 9, migrado desde Option solo de la Fase 5 de MVP3).
 ///
 /// ## Enfoque elegido
-/// Option sola no es una combinación válida para `RegisterEventHotKey` (Carbon): esa API espera
-/// una tecla "no modificadora" (letra, número, Space, etc.) más modificadores opcionales, no un
-/// modificador solo. La señal de que Option se presiona o se suelta llega como eventos de cambio
-/// de modificadores (`NSEvent.EventTypeMask.flagsChanged`, equivalente en AppKit a un evento
-/// `CGEventType.flagsChanged` de un event tap de CoreGraphics/Carbon). Se eligió
-/// `NSEvent.addGlobalMonitorForEvents(matching:)` en vez de instalar un `CGEventTap` a mano
-/// porque:
-/// - Es la envoltura de más alto nivel que AppKit ofrece para lo mismo (mismo mecanismo del
-///   sistema por debajo), sin manejar directamente un `CFMachPort`/`CFRunLoopSource`.
-/// - Solo necesita observar eventos, no interceptarlos ni modificarlos (no hace falta un tap que
-///   pueda consumir el evento), que es justo lo que permite un monitor global.
+/// Fn + Espacio combina un modificador (Fn) con una tecla "no modificadora" real (Space, keyCode
+/// 49), a diferencia de Option solo. Eso descarta `RegisterEventHotKey` (Carbon) como alternativa
+/// más liviana solo por simplicidad: esa API sí acepta esta combinación, pero se mantiene
+/// `NSEvent.addGlobalMonitorForEvents(matching:)` para no introducir un segundo mecanismo de
+/// registro de atajos en el proyecto y porque el modelo de permisos (ver abajo) es idéntico al que
+/// ya usaba el monitor de Option. La diferencia con la Fase 5 es la máscara de eventos: en vez de
+/// `flagsChanged` (que solo informa cambios de modificadores, sin contenido de tecla) ahora se
+/// observa `.keyDown`, chequeando `keyCode == 49` y que `modifierFlags` incluya `.function`.
+///
+/// Se descartó Option solo porque bloquea el uso normal de Option para acentos/diacríticos del
+/// teclado en español (Option+E, Option+U, etc. para á/é/í/ó/ú, ü) — Fn + Espacio no colisiona con
+/// ninguna combinación de tecla muerta.
+///
+/// ## Por qué Fn + Espacio es detectable de forma confiable
+/// La tecla Fn físicamente reasignada (Fn+flecha → Home/End, Fn+Delete → Forward Delete, Fn+F1-F12
+/// → teclas de medios) es interceptada por el driver de teclado antes de llegar a las apps como
+/// `modifierFlags`, así que esas combinaciones no son observables de forma confiable con esta
+/// técnica. Space no es una de esas teclas reasignadas: no tiene una función de sistema ligada a
+/// Fn, así que Fn + Espacio llega como un `keyDown` normal de keyCode 49 con `.function` presente
+/// en `modifierFlags`, igual que cualquier otro modificador.
 ///
 /// ## Permisos
-/// Un monitor global de eventos de teclado (incluye `flagsChanged`) requiere que la app esté
-/// habilitada en Ajustes del Sistema → Privacidad y Seguridad → Accesibilidad. Sin ese permiso,
-/// `addGlobalMonitorForEvents` no falla ni devuelve `nil`: el token de monitor se crea igual,
-/// simplemente no le llegan eventos hasta que se otorgue el permiso. Por eso `start` instala el
-/// monitor siempre (así el atajo empieza a andar solo si el permiso se concede después, sin
-/// requerir reiniciar la app) y usa `AXIsProcessTrusted()` (sin mostrar el diálogo nativo, para no
-/// pedir permiso fuera de este flujo) únicamente para decidir si lanza
-/// `GlobalHotkeyServiceError.accessibilityPermissionDenied` y para dejarlo en
-/// `lastRegistrationError`. `DictationViewModel` sigue llamando `start` con `try?`, así que el
-/// throw no rompe nada más que arranque la app; `currentStatus()` (Fase 6 de MVP3) es la vía por
-/// la que la UI se entera de ese estado y lo vuelve a consultar sin reiniciar el servicio.
+/// Un monitor global de eventos de teclado (`flagsChanged` o `keyDown`, misma API por debajo)
+/// requiere que la app esté habilitada en Ajustes del Sistema → Privacidad y Seguridad →
+/// Accesibilidad; no hay un permiso adicional de "Monitoreo de entrada" involucrado porque
+/// `NSEvent.addGlobalMonitorForEvents` no usa `CGEventTapCreate`/`IOHIDManager` directamente (esos
+/// sí activan ese permiso separado). Sin el permiso de Accesibilidad, `addGlobalMonitorForEvents`
+/// no falla ni devuelve `nil`: el token de monitor se crea igual, simplemente no le llegan eventos
+/// hasta que se otorgue el permiso. Por eso `start` instala el monitor siempre (así el atajo
+/// empieza a andar solo si el permiso se concede después, sin requerir reiniciar la app) y usa
+/// `AXIsProcessTrusted()` (sin mostrar el diálogo nativo, para no pedir permiso fuera de este
+/// flujo) únicamente para decidir si lanza `GlobalHotkeyServiceError.accessibilityPermissionDenied`
+/// y para dejarlo en `lastRegistrationError`. `DictationViewModel` sigue llamando `start` con
+/// `try?`, así que el throw no rompe nada más que arranque la app; `currentStatus()` (Fase 6 de
+/// MVP3) es la vía por la que la UI se entera de ese estado y lo vuelve a consultar sin reiniciar
+/// el servicio.
 ///
 /// ## Limitaciones conocidas
-/// - Si el usuario suelta un modificador extra (p. ej. Cmd) mientras Option sigue presionado, esa
-///   transición hacia "solo Option" se interpreta como una presión nueva del atajo. Caso borde
+/// - No verificado en hardware real durante esta migración (sin captura de pantalla ni automation
+///   de UI disponible en este entorno): el comportamiento de Fn en distintos modelos de teclado
+///   (Magic Keyboard vs. built-in, teclados de terceros sin tecla Fn dedicada) puede variar. Ver
+///   checklist de QA manual.
+/// - Igual que antes con Option: si se suelta un modificador extra mientras Fn + Space sigue
+///   presionado, o viceversa, puede interpretarse como una presión nueva del atajo. Caso borde
 ///   aceptado para este MVP.
-/// - Todavía no hay modo "mantener presionado" (hold-to-talk); ver el TODO en
-///   `handleFlagsChanged`.
+/// - Todavía no hay modo "mantener presionado" (hold-to-talk); ver el TODO en `handleKeyDown`.
 final class LiveGlobalHotkeyService: GlobalHotkeyServicing {
-    /// Modificadores que importan para decidir si "solo Option" está presionado; excluye ruido
-    /// como Caps Lock o la tecla Fn.
-    private static let relevantFlags: NSEvent.ModifierFlags = [.shift, .control, .option, .command]
+    /// keyCode físico de la barra espaciadora, independiente de layout de teclado (no es un
+    /// carácter, así que no varía con distribuciones como QWERTY en español vs. inglés).
+    static let spaceKeyCode: UInt16 = 49
 
     private var onHotkeyPressed: (@MainActor () -> Void)?
     private var monitor: Any?
-    private var lastRelevantFlags: NSEvent.ModifierFlags = []
     /// `true` desde que `start` se llama por primera vez hasta el siguiente `stop`. Distingue
     /// "todavía no arrancó" (`.unknown`) de "arrancó, pero sin permiso de Accesibilidad todavía"
     /// (`.accessibilityPermissionRequired`) en `currentStatus()`.
@@ -109,12 +125,11 @@ final class LiveGlobalHotkeyService: GlobalHotkeyServicing {
 
     func start(onHotkeyPressed: @escaping @MainActor () -> Void) throws {
         self.onHotkeyPressed = onHotkeyPressed
-        lastRelevantFlags = []
         lastRegistrationError = nil
         hasStarted = true
 
-        monitor = NSEvent.addGlobalMonitorForEvents(matching: .flagsChanged) { [weak self] event in
-            self?.handleFlagsChanged(event)
+        monitor = NSEvent.addGlobalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            self?.handleKeyDown(event)
         }
 
         guard monitor != nil else {
@@ -136,7 +151,6 @@ final class LiveGlobalHotkeyService: GlobalHotkeyServicing {
         }
         monitor = nil
         onHotkeyPressed = nil
-        lastRelevantFlags = []
         hasStarted = false
     }
 
@@ -152,21 +166,21 @@ final class LiveGlobalHotkeyService: GlobalHotkeyServicing {
         return AXIsProcessTrusted() ? .active : .accessibilityPermissionRequired
     }
 
-    /// Dispara el callback solo en la transición hacia "Option solo presionado", nunca mientras
-    /// se mantiene presionado: el sistema solo entrega `flagsChanged` cuando el estado de los
-    /// modificadores cambia, así que un Option mantenido no genera eventos repetidos y no hace
-    /// falta un debounce adicional.
+    /// Dispara el callback solo en el `keyDown` inicial de Space con `.function` presente, nunca
+    /// en las repeticiones automáticas que genera el sistema mientras se mantiene una tecla
+    /// presionada (`isARepeat`): a diferencia de `flagsChanged` (que no repite), `keyDown` sí lo
+    /// hace, así que sin este chequeo mantener Fn + Espacio dispararía el toggle varias veces por
+    /// segundo. `internal` (no `private`) para que los tests puedan invocarlo directamente con
+    /// eventos sintéticos construidos vía `NSEvent.keyEvent(...)`, sin depender de un teclado real.
     ///
     /// TODO(post-MVP3): agregar modo "mantener presionado" (hold-to-talk) como alternativa al
-    /// toggle actual — probablemente distinguiendo cuánto tiempo pasa entre el `flagsChanged` de
-    /// presión y el de liberación de Option.
-    private func handleFlagsChanged(_ event: NSEvent) {
-        let current = event.modifierFlags.intersection(Self.relevantFlags)
-        let wasOptionOnly = lastRelevantFlags == [.option]
-        let isOptionOnly = current == [.option]
-        lastRelevantFlags = current
-
-        guard isOptionOnly, !wasOptionOnly, let callback = onHotkeyPressed else { return }
+    /// toggle actual — probablemente distinguiendo el primer `keyDown` (ya disponible acá) de un
+    /// `keyUp` posterior de Space.
+    func handleKeyDown(_ event: NSEvent) {
+        guard event.keyCode == Self.spaceKeyCode,
+              event.modifierFlags.contains(.function),
+              !event.isARepeat,
+              let callback = onHotkeyPressed else { return }
         Task { @MainActor in
             callback()
         }

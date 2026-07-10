@@ -60,46 +60,70 @@ xcodebuild -project Scribe.xcodeproj -scheme Scribe \
 
 ## Usage
 
-1. Press "Grabar" and speak in Spanish. While recording, the app shows the
+The window is a compact dictation utility, not a document editor: a header,
+a central status area that's the main thing you look at, the record button,
+a small transcript card, and a thin footer. See "Phase 8" below for the
+reasoning behind that layout.
+
+1. Press "Grabar" (or Fn + Espacio, see below) and speak in Spanish. While
+   recording, the central status area shows a pulsing red indicator, the
    elapsed time, a meter for the microphone's input level (to confirm audio
    is being captured), and, past 2 and 5 minutes, a warning that the
    recording is getting long. Press "Detener" to stop.
 2. The first time, the model (~626 MB) needs to be downloaded with the
    "Descargar modelo" button. Transcription of the pending recording starts
    automatically as soon as the download finishes.
-3. While transcribing, an indeterminate progress indicator is shown
-   (WhisperKit doesn't expose incremental progress for this step) along with
-   a "Cancelar" button. Cancelling is "soft": the app discards the result as
+3. While transcribing, the central status area shows "Transcribiendo
+   localmente..." with an indeterminate progress indicator (WhisperKit
+   doesn't expose incremental progress for this step) along with a
+   "Cancelar" button. Cancelling is "soft": the app discards the result as
    soon as it arrives, but it can't guarantee WhisperKit will abort inference
    midway.
-4. The transcribed text appears in the editable area, with a word/character
-   counter below it. It can be edited by hand, copied with "Copiar", or
+4. Once transcribed, the central area shows "Transcripción lista" with a
+   prominent "Copiar" action. The text itself appears below in a smaller,
+   secondary transcript card, with a word/character counter under it. It can
+   be edited by hand, copied with the "Copiar" button next to "Limpiar", or
    cleared with "Limpiar". Recording again or clearing while there's an
    existing transcript asks for confirmation before replacing or deleting it.
 5. Once the model is installed, "Ver en Finder" opens the folder where it
    lives on disk.
-6. Pressing Option alone (with no other key) anywhere in macOS — not just
-   with Scribe's window focused — brings Scribe to the front and starts
-   recording; pressing Option again stops it and starts transcription,
-   exactly as if the "Grabar"/"Detener" button had been pressed. Holding
-   Option down doesn't repeat-trigger it. If Scribe's window is minimized,
-   it's unminimized; if it was closed while the app kept running, pressing
-   Option reopens it.
+6. Pressing Fn + Espacio anywhere in macOS — not just with Scribe's window
+   focused — brings Scribe to the front and starts recording; pressing
+   Fn + Espacio again stops it and starts transcription, exactly as if the
+   "Grabar"/"Detener" button had been pressed. Holding it down doesn't
+   repeat-trigger it. If Scribe's window is minimized, it's unminimized; if
+   it was closed while the app kept running, pressing Fn + Espacio reopens
+   it.
 
-### Global Option shortcut and Accessibility permission
+### Global Fn + Espacio shortcut and Accessibility permission
 
-The Option shortcut is implemented with a global event monitor
-(`NSEvent.addGlobalMonitorForEvents`), which macOS only delivers events to if
-the app has been granted the **Accessibility** permission (Ajustes del
-Sistema → Privacidad y seguridad → Accesibilidad). Scribe never shows the
-native Accessibility prompt itself (`AXIsProcessTrustedWithOptions` is not
-used) — it only checks silently with `AXIsProcessTrusted()` and reflects the
-result in the UI, so granting the permission is always the user's explicit
-choice from System Settings, not something the app pushes on launch.
+Scribe's global dictation trigger is Fn + Espacio (modeled after Wispr
+Flow's default Mac shortcut), replacing the Option-alone trigger used
+through Phase 8. Option alone was dropped because it collides with macOS's
+Spanish dead-key accents (Option+E, Option+U, etc. for á/é/í/ó/ú, ü) —
+holding Option to type an accented vowel would otherwise also toggle
+recording. Fn + Espacio doesn't collide with any dead-key or system-reserved
+combination.
 
-If that permission hasn't been granted yet, pressing Option does nothing,
-and Scribe shows a small status message next to the model status
-explaining why ("Para usar Option desde cualquier app, Scribe necesita
+The shortcut is implemented with the same mechanism as before, just a
+different event mask: a global event monitor
+(`NSEvent.addGlobalMonitorForEvents(matching: .keyDown)`) checks for Space
+(keyCode 49) with the `.function` modifier flag set and `isARepeat == false`.
+macOS only delivers those events if the app has been granted the
+**Accessibility** permission (Ajustes del Sistema → Privacidad y seguridad →
+Accesibilidad) — the same single permission the Option-based version needed;
+switching from `.flagsChanged` to `.keyDown` doesn't add a separate "Input
+Monitoring" requirement, since both event masks go through the same
+Accessibility-gated `NSEvent` API rather than a raw `CGEventTap`/
+`IOHIDManager` tap. Scribe never shows the native Accessibility prompt itself
+(`AXIsProcessTrustedWithOptions` is not used) — it only checks silently with
+`AXIsProcessTrusted()` and reflects the result in the UI, so granting the
+permission is always the user's explicit choice from System Settings, not
+something the app pushes on launch.
+
+If that permission hasn't been granted yet, pressing Fn + Espacio does
+nothing, and Scribe shows a small status message next to the model status
+explaining why ("Para usar Fn + Espacio desde cualquier app, Scribe necesita
 permiso de Accesibilidad."), with an "Abrir Ajustes" button that opens the
 Accessibility privacy pane directly, and a "Revisar permiso" button to
 recheck without restarting the app. The status also rechecks automatically
@@ -107,25 +131,33 @@ whenever the app becomes active again (e.g. after returning from System
 Settings). Missing this permission is non-fatal: the record/stop button in
 the main window always works regardless of it.
 
-Pressing Option also brings Scribe's window to the front, regardless of
+Pressing Fn + Espacio also brings Scribe's window to the front, regardless of
 which app currently has focus — see "Window activation" below.
+
+**Known limitation:** Fn combined with certain keys (arrows, Delete, F-keys)
+is intercepted by the keyboard driver for built-in system functions before it
+reaches any app as a modifier flag, so not every Fn+key combination is
+observable this way. Space isn't one of the reassigned keys, so Fn + Espacio
+is expected to arrive as a normal `keyDown` with `.function` set — but this
+hasn't been confirmed on real hardware across every keyboard model (see
+"Manual QA" below).
 
 ### Window activation
 
-When the global Option shortcut fires, `DictationViewModel` first asks
+When the global Fn + Espacio shortcut fires, `DictationViewModel` first asks
 `WindowActivationServicing` to activate the app and bring its window to the
 front, then runs the same `handlePrimaryDictationAction` the button uses —
-so pressing Option always shows Scribe before deciding whether to record,
-show the replace/clear confirmation, or just keep showing the transcribing
-state. The click-driven button path never calls this, since the window is
-already the one the user just clicked in.
+so pressing Fn + Espacio always shows Scribe before deciding whether to
+record, show the replace/clear confirmation, or just keep showing the
+transcribing state. The click-driven button path never calls this, since the
+window is already the one the user just clicked in.
 
 `LiveWindowActivationService` (`Scribe/WindowActivationService.swift`) calls
 `NSApplication.shared.activate(ignoringOtherApps: true)`, unhides the app if
 hidden, and deminiaturizes the window if it was minimized. `DictationViewModel`
 now lives in `AppDelegate` (`Scribe/AppDelegate.swift`), not as `ContentView`'s
 `@StateObject`: closing the window used to deallocate the view model along
-with it, which silently killed the global Option monitor (it captures `self`
+with it, which silently killed the global hotkey monitor (it captures `self`
 as `weak`) until the app was relaunched. Owning it at the app level keeps the
 monitor alive for as long as the app is running, independent of whether the
 window is open, minimized, or closed.
@@ -136,8 +168,8 @@ If the window was closed entirely (no `NSWindow` left to reactivate),
 `@Environment(\.openWindow)` action for the `WindowGroup(id: "main")` scene.
 Because it's a singleton `WindowGroup` (no associated per-window data type),
 calling `openWindow(id:)` while a window already exists just brings that
-window forward instead of creating a second one, so repeated Option presses
-never produce duplicate windows.
+window forward instead of creating a second one, so repeated Fn + Espacio
+presses never produce duplicate windows.
 
 ## Architecture
 
@@ -146,18 +178,19 @@ never produce duplicate windows.
 | `ScribeApp.swift` | App entry point (`WindowGroup`) and the `openWindow` bridge for reopening a closed window. |
 | `AppDelegate.swift` | Owns the single long-lived `DictationViewModel`, independent of window lifecycle. |
 | `ContentView.swift` | Main SwiftUI layout and confirmation dialogs. |
-| `DictationViewModel.swift` | App state and orchestration between services. |
+| `DictationViewModel.swift` | App state, `PrimaryState` copy mapping, and orchestration between services. |
 | `WindowActivationService.swift` | Brings Scribe's window to the front (`WindowActivationServicing`) when the global shortcut fires. |
+| `ScribeHeaderView.swift` | Fixed header: app name and "Dictado local" line. |
+| `DictationStatusView.swift` | Central status area: icon, `PrimaryState` title, and the recording/transcribing/copy feedback nested inside it. |
 | `RecordingButton.swift` | Main Record/Stop button. |
-| `RecordingFeedbackView.swift` | Elapsed time, level meter, and duration warnings while recording. |
-| `TranscribingFeedbackView.swift` | Progress indicator and cancel button while transcribing. |
+| `RecordingFeedbackView.swift` | Elapsed time, level meter, and duration warnings while recording (nested in `DictationStatusView`). |
+| `TranscribingFeedbackView.swift` | Progress indicator and cancel button while transcribing (nested in `DictationStatusView`). |
 | `TranscriptEditorView.swift` | Editable transcript area, with placeholder and word/character counter. |
-| `StatusBadgeView.swift` | Compact indicator of the app's current state. |
 | `ModelStatusView.swift` | Model status (installed / downloading / not installed). |
-| `HotkeyStatusView.swift` | Global Option shortcut status and Accessibility-permission recovery UI. |
+| `HotkeyStatusView.swift` | Global Fn + Espacio shortcut status and Accessibility-permission recovery UI. |
 | `PrivacyNoteView.swift` | Fixed privacy note at the bottom of the window. |
 | `AudioRecorderService.swift` | Records audio to a local WAV file (16 kHz, mono, 16-bit). |
-| `GlobalHotkeyService.swift` | Global Option-key monitor (`GlobalHotkeyServicing`) and its `HotkeyStatus`. |
+| `GlobalHotkeyService.swift` | Global Fn + Espacio monitor (`GlobalHotkeyServicing`) and its `HotkeyStatus`. |
 | `MicrophonePermissionManager.swift` | System microphone permission. |
 | `ModelManager.swift` | Presence and explicit download of the WhisperKit model. |
 | `TranscriptionService.swift` | Wraps WhisperKit to transcribe locally. |
@@ -196,6 +229,21 @@ Replacing or clearing a non-empty transcript is a destructive action, so
 they set `pendingConfirmation` (`.replaceTranscript` / `.clearTranscript`),
 which `ContentView` renders as a confirmation alert, and only
 `confirmPendingAction()`/`cancelPendingConfirmation()` resolve it.
+
+`PrimaryState` (Phase 8) is a separate, derived mapping used only for the
+big title in `DictationStatusView` — `.ready`, `.recording`,
+`.stoppingRecording`, `.transcribing`, `.transcriptReady`,
+`.microphoneDenied`, `.missingModel`, `.downloadingModel`,
+`.accessibilityRequired`, `.error(message)`. It exists apart from
+`statusText` (the ad hoc detail line set inline through the flow methods)
+because the central area needs one fixed, predictable string per case,
+not whatever intermediate text an async transition happened to set.
+`DictationViewModel.primaryState` resolves it with a fixed priority: an
+in-progress session (recording/transcribing/etc.) always wins, since it's
+the most urgent live truth, even if the model is missing or Accessibility
+isn't granted — neither blocks recording itself. Only at rest (`.idle`) do
+permission/model/accessibility blockers and transcript-ready get checked,
+in that order.
 
 ## Model
 
@@ -345,17 +393,20 @@ transcription), these don't indicate a real problem.
   `ModelManager`.
 - No menu bar icon or live transcription while recording (out of scope for
   this version, reserved for a future one).
-- The global shortcut is fixed to Option alone; it isn't configurable and
+- The global shortcut is fixed to Fn + Espacio; it isn't configurable and
   there's no alternative combo.
 - No "hold to talk" mode: the shortcut always toggles start/stop, it never
   records only while a key is held down.
 
-## MVP3: global Option shortcut
+## MVP3: global shortcut (originally Option, migrated to Fn + Espacio in Phase 9)
 
-Scribe's global dictation trigger is the Option key alone, pressed with no
-other modifier, from anywhere in macOS — not just with Scribe's window
-focused. See "Global Option shortcut and Accessibility permission" above for
-the user-facing behavior and permission flow.
+Scribe's global dictation trigger was originally the Option key alone,
+pressed with no other modifier, from anywhere in macOS — not just with
+Scribe's window focused. Phase 9 (below) replaced it with Fn + Espacio; see
+"Global Fn + Espacio shortcut and Accessibility permission" above for the
+current user-facing behavior and permission flow. The architectural notes
+below (protocol shape, state ownership) are unchanged since MVP3 — only the
+key-detection details changed, and are described as of Phase 9.
 
 Implementation notes:
 
@@ -372,10 +423,13 @@ Implementation notes:
   keeps the hotkey and the UI from getting out of sync (e.g. the hotkey
   starting a second recording while one is already running, or bypassing the
   replace/clear-transcript confirmation).
-- `LiveGlobalHotkeyService` registers a `flagsChanged` global monitor via
-  `NSEvent.addGlobalMonitorForEvents` and fires the callback only on the
-  transition into exactly `[.option]` (so holding Option doesn't
-  repeat-trigger it), hopping to the main actor before calling back.
+- `LiveGlobalHotkeyService` registers a `keyDown` global monitor via
+  `NSEvent.addGlobalMonitorForEvents` and fires the callback only when Space
+  (keyCode 49) arrives with the `.function` modifier flag set and
+  `isARepeat == false` (so holding Fn + Espacio doesn't repeat-trigger it),
+  hopping to the main actor before calling back. Before Phase 9 this
+  monitored `flagsChanged` instead, firing on the transition into exactly
+  `[.option]`.
 - `HotkeyStatus` (`.unknown` / `.active` / `.accessibilityPermissionRequired`
   / `.failed(String)`) is recalculated on every `currentStatus()` call, never
   cached — the monitor is installed unconditionally on `start`, regardless of
@@ -393,17 +447,18 @@ Remaining risks:
 - Audio interruption handling (see "Error handling") reverts to `.idle` and
   sets a typed error, but there's no menu bar icon or notification yet to
   surface that to a user who triggered the whole flow via keyboard only.
-- Manual, real-device QA of the Option shortcut and the Accessibility
-  permission flow (see the checklist in "Global Option shortcut and
+- Manual, real-device QA of the Fn + Espacio shortcut and the Accessibility
+  permission flow (see the checklist in "Global Fn + Espacio shortcut and
   Accessibility permission") still needs a Mac with GUI/Accessibility access
-  to fully exercise — automated tests only cover it through fakes.
+  to fully exercise — automated tests only cover the key-detection logic
+  with synthetic `NSEvent`s and the rest through fakes.
 
 ## Phase 7: window activation and app focus
 
-Pressing Option no longer just toggles recording — it also brings Scribe's
-window to the front first, from any app, so the confirmation dialog (replace/
-clear transcript) and the recording/transcribing feedback are always visible
-to the user who just triggered them. See "Window activation" under
+Pressing the global shortcut no longer just toggles recording — it also
+brings Scribe's window to the front first, from any app, so the confirmation
+dialog (replace/clear transcript) and the recording/transcribing feedback are
+always visible to the user who just triggered them. See "Window activation" under
 Architecture for the implementation (`WindowActivationServicing`,
 `AppDelegate` owning `DictationViewModel`, the `openWindow` reopen bridge).
 
@@ -419,12 +474,94 @@ appeared at least once, this is reliable for the normal case (app launched
 normally, window closed later) but hasn't been exercised for exotic startup
 states (e.g. the window failing to open at all on first launch).
 
+## Phase 8: compact dictation UI
+
+The main window was redesigned to feel like a small dictation utility
+instead of a document editor, following the interaction principles of
+compact/fast/minimal/keyboard-first tools (not their branding, assets, or
+copy): one obvious central state, strong recording/transcribing feedback,
+and a transcript that's secondary rather than the dominant element.
+
+- `ScribeHeaderView` is a static header (app name + "Dictado local"); it
+  carries no live state, so there's exactly one place — the new
+  `DictationStatusView` — that changes per state.
+- `DictationStatusView` is the focal point: a large icon (color-coded and
+  pulsing while recording) plus the `PrimaryState` title (see "State
+  model"), with the existing `RecordingFeedbackView`/`TranscribingFeedbackView`
+  nested inside it instead of living as separate siblings in `ContentView`.
+  When the transcript is ready and nothing more urgent is happening, it
+  also shows a prominent "Copiar" call to action.
+- `TranscriptEditorView`'s minimum height dropped from 220 to 140 so it
+  reads as a secondary card, not the dominant element; it keeps its
+  placeholder, word/character counter, copy/clear buttons, and the
+  replace/clear confirmation flow untouched.
+- `StatusBadgeView` was retired: `DictationStatusView`'s title + icon color
+  now cover the same "what's going on" signal it used to provide, and
+  keeping both was redundant chatter in a compact window.
+- The footer (`ModelStatusView`, `HotkeyStatusView`, `PrivacyNoteView`)
+  is unchanged in structure; only copy got trimmed (the hotkey hint read
+  "Option para grabar/detener" at the time, the privacy note "Audio y texto
+  se procesan localmente") to match the terser tone. The hotkey hint text was
+  updated again in Phase 9 when the shortcut itself changed from Option to
+  Fn + Espacio.
+- The window's minimum size went from 440×580 to 380×460.
+
+Deliberately out of scope for this phase (unchanged): auto-paste, menu bar
+mode, hold-to-talk, a configurable shortcut, AI cleanup, history, a model
+selector, and any always-on-top/floating panel behavior — the last one
+would need real tradeoff analysis (losing normal window management vs.
+staying reachable) that wasn't asked for here, so the window remains a
+regular, non-floating window.
+
+## Phase 9: Fn + Espacio global shortcut
+
+Replaced the Option-alone global trigger with Fn + Espacio (modeled after
+Wispr Flow's default Mac shortcut). Option alone was pulled because it
+blocks normal use of Option for Spanish accents/dead keys (Option+E, etc.
+for á/é/í/ó/ú) — every accented keystroke would otherwise also toggle
+recording.
+
+- `LiveGlobalHotkeyService` (`Scribe/GlobalHotkeyService.swift`) switched its
+  global monitor from `NSEvent.addGlobalMonitorForEvents(matching: .flagsChanged)`
+  to `.keyDown`, firing the callback when Space (keyCode 49) arrives with the
+  `.function` modifier flag and `isARepeat == false`. This mirrors what a
+  physical Fn + Espacio press produces: Space isn't one of the keys macOS
+  reassigns when combined with Fn (unlike arrows, Delete, or the F-row), so
+  it reaches apps as an ordinary `keyDown` rather than being intercepted by
+  the keyboard driver.
+- The permission model is unchanged: both event masks go through the same
+  `NSEvent` API, which macOS gates on the **Accessibility** permission alone
+  (checked via `AXIsProcessTrusted()`, same as before). Switching to
+  `.keyDown` does not introduce a separate "Input Monitoring" requirement,
+  since that TCC category applies to raw `CGEventTap`/`IOHIDManager` taps,
+  not to `NSEvent`'s higher-level global monitor.
+- `handleKeyDown` (internal, not `private`) is directly unit-tested with
+  synthetic `NSEvent`s built via `NSEvent.keyEvent(with:...)` — no real
+  keyboard or OS-level event delivery involved — covering: Fn + Espacio
+  fires once; Space alone, Fn + any other key, and Option + Espacio don't
+  fire; and holding the combo down (`isARepeat == true`) doesn't
+  repeat-fire. See `ScribeTests/GlobalHotkeyServiceTests.swift`.
+- All UI copy that named "Option" (the ready-state hint, `HotkeyStatusView`'s
+  active/permission-required text) now says "Fn + Espacio" instead. No other
+  behavior changed: the hotkey service is still a "dumb" notifier behind
+  `GlobalHotkeyServicing`, still wired to
+  `handlePrimaryDictationAction(source: .globalHotkey)`, and window
+  activation (see "Window activation" above) is unaffected.
+
+Known limitation: the real Fn + Espacio detection was not exercised on
+physical hardware as part of this change — there was no way to interact with
+a live keyboard or take screenshots for visual QA in this environment (see
+"Manual QA checklist" below, to be run by a person on a real Mac). Fn-key
+behavior can vary slightly across keyboard models (Magic Keyboard vs.
+built-in vs. third-party), so this is the main risk to validate before
+relying on it.
+
 ## Next steps (out of scope for this version)
 
 Tentative roadmap, in priority order:
 
 - **MVP3** — Automatic pasting of the transcription result into whichever
-  app was active before the shortcut was pressed (the global Option
+  app was active before the shortcut was pressed (the global Fn + Espacio
   shortcut itself, its permission UX, and window activation are already
   implemented).
 - **MVP4** — Menu bar icon (menu bar extra) as an alternative way to use the

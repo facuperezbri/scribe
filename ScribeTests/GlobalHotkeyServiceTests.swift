@@ -1,3 +1,4 @@
+import AppKit
 import XCTest
 @testable import Scribe
 
@@ -5,10 +6,12 @@ import XCTest
 /// teclado real) y que `DictationViewModel` conecta el callback del atajo global con
 /// `handlePrimaryDictationAction(source: .globalHotkey)` sin duplicar el flujo de grabar/detener.
 ///
-/// Los casos que ejercitan `DictationViewModel` completo (Fase 5 de MVP3: atajo de Option en modo
-/// toggle) simulan la presión del atajo a través de `FakeGlobalHotkeyService.simulateHotkeyPressed()`,
-/// nunca con un evento real de teclado — eso es justamente lo que `LiveGlobalHotkeyService`
-/// traduce a esa llamada, y queda fuera del alcance de un test unitario.
+/// Los casos que ejercitan `DictationViewModel` completo (atajo en modo toggle, Fn + Espacio desde
+/// la Fase 9, antes Option solo en la Fase 5 de MVP3) simulan la presión del atajo a través de
+/// `FakeGlobalHotkeyService.simulateHotkeyPressed()`, nunca con un evento real de teclado — eso es
+/// justamente lo que `LiveGlobalHotkeyService` traduce a esa llamada, y queda fuera del alcance de
+/// un test unitario. La lógica real de detección de `keyCode`/`.function`/`isARepeat` de
+/// `LiveGlobalHotkeyService.handleKeyDown` sí se cubre más abajo con eventos sintéticos.
 @MainActor
 final class GlobalHotkeyServiceTests: XCTestCase {
     private func makeViewModel(
@@ -78,7 +81,7 @@ final class GlobalHotkeyServiceTests: XCTestCase {
         XCTAssertEqual(viewModel.state.session, .recording)
     }
 
-    /// Toggle: la segunda presión de Option, con la grabación en curso, detiene y arranca la
+    /// Toggle: la segunda presión del atajo, con la grabación en curso, detiene y arranca la
     /// transcripción — el mismo flujo que produce un segundo toque del botón de la UI.
     func testSecondGlobalHotkeyPressStopsRecordingAndTranscribes() async {
         let hotkeyService = FakeGlobalHotkeyService()
@@ -316,5 +319,104 @@ final class GlobalHotkeyServiceTests: XCTestCase {
         service.stop()
 
         XCTAssertEqual(service.currentStatus(), .unknown)
+    }
+
+    // MARK: - Fase 9: detección real de Fn + Espacio (LiveGlobalHotkeyService.handleKeyDown)
+    //
+    // Estos tests ejercitan la lógica real de detección con eventos sintéticos construidos vía
+    // `NSEvent.keyEvent`, sin depender de un teclado real ni de un monitor global entregando
+    // eventos del sistema. `handleKeyDown` dispara el callback con `Task { @MainActor in ... }`,
+    // así que cada aserción positiva espera brevemente antes de verificar.
+
+    private func makeKeyDownEvent(
+        keyCode: UInt16,
+        modifierFlags: NSEvent.ModifierFlags,
+        isARepeat: Bool = false
+    ) -> NSEvent {
+        NSEvent.keyEvent(
+            with: .keyDown,
+            location: .zero,
+            modifierFlags: modifierFlags,
+            timestamp: 0,
+            windowNumber: 0,
+            context: nil,
+            characters: " ",
+            charactersIgnoringModifiers: " ",
+            isARepeat: isARepeat,
+            keyCode: keyCode
+        )!
+    }
+
+    func testHandleKeyDownFiresOnFnSpace() async {
+        let service = LiveGlobalHotkeyService()
+        var pressCount = 0
+        try? service.start { pressCount += 1 }
+
+        service.handleKeyDown(
+            makeKeyDownEvent(keyCode: LiveGlobalHotkeyService.spaceKeyCode, modifierFlags: .function)
+        )
+        try? await Task.sleep(for: .milliseconds(50))
+
+        XCTAssertEqual(pressCount, 1)
+    }
+
+    /// Space sola (sin Fn) no debe disparar el atajo: si lo hiciera, escribir un espacio normal
+    /// en cualquier app activaría la grabación.
+    func testHandleKeyDownDoesNotFireForSpaceAlone() async {
+        let service = LiveGlobalHotkeyService()
+        var pressed = false
+        try? service.start { pressed = true }
+
+        service.handleKeyDown(makeKeyDownEvent(keyCode: LiveGlobalHotkeyService.spaceKeyCode, modifierFlags: []))
+        try? await Task.sleep(for: .milliseconds(50))
+
+        XCTAssertFalse(pressed)
+    }
+
+    /// Fn sola (con cualquier otra tecla, no Space) no debe disparar el atajo.
+    func testHandleKeyDownDoesNotFireForFnWithOtherKey() async {
+        let service = LiveGlobalHotkeyService()
+        var pressed = false
+        try? service.start { pressed = true }
+
+        // keyCode 0 == "a" en el layout físico ANSI.
+        service.handleKeyDown(makeKeyDownEvent(keyCode: 0, modifierFlags: .function))
+        try? await Task.sleep(for: .milliseconds(50))
+
+        XCTAssertFalse(pressed)
+    }
+
+    /// Option + Espacio (el atajo viejo, con otro modificador) no debe disparar el atajo nuevo:
+    /// confirma que la migración no dejó ninguna ruta que siga reaccionando a Option.
+    func testHandleKeyDownDoesNotFireForOptionSpace() async {
+        let service = LiveGlobalHotkeyService()
+        var pressed = false
+        try? service.start { pressed = true }
+
+        service.handleKeyDown(makeKeyDownEvent(keyCode: LiveGlobalHotkeyService.spaceKeyCode, modifierFlags: .option))
+        try? await Task.sleep(for: .milliseconds(50))
+
+        XCTAssertFalse(pressed)
+    }
+
+    /// Mantener Fn + Espacio presionado genera `keyDown` repetidos (`isARepeat == true`) que no
+    /// deben volver a disparar el atajo — solo el `keyDown` inicial cuenta como una presión.
+    func testHandleKeyDownIgnoresRepeatsWhileHeld() async {
+        let service = LiveGlobalHotkeyService()
+        var pressCount = 0
+        try? service.start { pressCount += 1 }
+
+        service.handleKeyDown(
+            makeKeyDownEvent(keyCode: LiveGlobalHotkeyService.spaceKeyCode, modifierFlags: .function, isARepeat: false)
+        )
+        service.handleKeyDown(
+            makeKeyDownEvent(keyCode: LiveGlobalHotkeyService.spaceKeyCode, modifierFlags: .function, isARepeat: true)
+        )
+        service.handleKeyDown(
+            makeKeyDownEvent(keyCode: LiveGlobalHotkeyService.spaceKeyCode, modifierFlags: .function, isARepeat: true)
+        )
+        try? await Task.sleep(for: .milliseconds(50))
+
+        XCTAssertEqual(pressCount, 1)
     }
 }

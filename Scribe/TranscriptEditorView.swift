@@ -31,7 +31,7 @@ struct TranscriptEditorView: View {
                 }
                 .padding(10)
             }
-            .frame(minHeight: 220)
+            .frame(minHeight: 140)
             .background(Color(nsColor: .textBackgroundColor))
             .clipShape(RoundedRectangle(cornerRadius: 10))
             .overlay(
