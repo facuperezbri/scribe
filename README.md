@@ -127,6 +127,20 @@ Accessibility-gated `NSEvent` API rather than a raw `CGEventTap`/
 permission is always the user's explicit choice from System Settings, not
 something the app pushes on launch.
 
+`NSEvent.addGlobalMonitorForEvents` only delivers events destined for *other*
+apps — as soon as Scribe itself becomes the active app (e.g. its window is
+open and focused), the system stops routing those events to the global
+monitor. MVP4 (Phase 1–2) added a second, local monitor
+(`NSEvent.addLocalMonitorForEvents(matching: .keyDown)`) that covers exactly
+that complementary case, so Fn + Espacio keeps working whether another app or
+Scribe itself currently has focus. The two dispatch paths are mutually
+exclusive for the same physical key press (AppKit delivers an event through
+one or the other, never both), so having both monitors installed doesn't
+double-trigger the shortcut — both delegate to the same `handleKeyDown`
+detection logic. Unlike the global monitor, the local one doesn't require the
+Accessibility permission, and it returns the event unmodified so it never
+swallows normal typing inside Scribe's own window.
+
 If that permission hasn't been granted yet, pressing Fn + Espacio does
 nothing, and Scribe shows a small status message next to the model status
 explaining why ("Para usar Fn + Espacio desde cualquier app, Scribe necesita
@@ -416,6 +430,11 @@ above as "Manual QA"/"Manual QA checklist"):
   Press again to stop and transcribe. Try it on more than one keyboard model
   if possible (built-in vs. Magic Keyboard vs. third-party), since Fn-key
   behavior can vary (see "MVP3").
+- **Fn + Espacio while Scribe itself is focused** — with Scribe's own window
+  open and focused, confirm the shortcut still starts/stops recording (this
+  is the local-monitor path added in MVP4 Phase 1–2, distinct from the
+  global-monitor path used when another app has focus) and that typing
+  normally in the transcript editor is unaffected.
 - **Floating overlay** — confirm it shows a mic-level indicator while
   recording (bars should react to actual mic input), a cascading-dots
   indicator while transcribing, and a brief checkmark "Listo" flash after a
