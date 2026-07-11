@@ -43,3 +43,17 @@ Se descartó `RegisterEventHotKey` (Carbon) como alternativa a `NSEvent.addGloba
 ## Ítem de la barra de menús
 
 Scribe puede usarse como utilitario en background sin depender de que la ventana principal esté abierta: la barra de menús ofrece acciones rápidas (iniciar/detener dictado, copiar, mostrar ventana) delegando siempre en `DictationViewModel`, el mismo punto de entrada centralizado que usa el botón de la ventana principal y el atajo global.
+
+## Reabrir la ventana principal si se cerró del todo
+
+Si la ventana se cerró por completo (no queda un `NSWindow` para reactivar), `LiveWindowActivationService` recurre a un closure `reopenHandler` que `ScribeApp` registra una sola vez, al arrancar, envolviendo la acción `@Environment(\.openWindow)` de SwiftUI para el `WindowGroup(id: "main")`. Al ser un `WindowGroup` singleton (sin tipo de dato asociado por ventana), llamar `openWindow(id:)` mientras ya existe una ventana simplemente la trae al frente en vez de crear una segunda, así que activaciones repetidas nunca producen ventanas duplicadas.
+
+**Limitación conocida:** este registro depende de que `ContentView.onAppear` haya corrido al menos una vez antes de que la ventana se cierre. Es confiable en el caso normal (la app arranca, la ventana se cierra después), pero no está probado en estados de arranque atípicos (por ejemplo, si la ventana fallara al abrirse en el primer lanzamiento).
+
+## Identidad de la app estable para TCC (rename LocalDictate → Scribe)
+
+El Bundle Identifier se mantuvo como `com.localdictate.app` a propósito durante el rename de LocalDictate a Scribe, aunque el nombre visible y el módulo cambiaron. TCC (el sistema de permisos de macOS) asocia el permiso de micrófono otorgado al Bundle Identifier, no al nombre visible ni al módulo — cambiarlo habría reseteado el permiso de micrófono de todo el mundo sin ningún beneficio funcional. Los datos existentes de `LocalDictate` en disco (transcripción, modelo descargado) y las claves chicas de `UserDefaults` se migraron hacia adelante (la transcripción se copia, el modelo se lee donde ya está sin copiarlo, las preferencias se renombran) sin borrar nunca los archivos legados.
+
+## `PrimaryState` separado de `statusText`
+
+`PrimaryState` es un mapeo derivado aparte, usado solo para el título grande de `DictationStatusView` — a diferencia de `statusText` (la línea de detalle ad hoc que se va seteando inline a lo largo de los métodos del flujo). El área central necesita un string fijo y predecible por caso, no cualquier texto intermedio que una transición async haya dejado seteado de paso. `DictationViewModel.primaryState` lo resuelve con una prioridad fija: una sesión en curso (grabando/transcribiendo/etc.) siempre gana, por ser la verdad viva más urgente, incluso si falta el modelo o no está otorgada la Accesibilidad — ninguna de las dos bloquea la grabación en sí. Solo en reposo (`.idle`) se consultan permiso/modelo/Accesibilidad y transcripción lista, en ese orden.
