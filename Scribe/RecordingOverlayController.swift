@@ -24,7 +24,9 @@ final class RecordingOverlayController {
     private static let fadeDuration: TimeInterval = 0.15
 
     init(viewModel: DictationViewModel) {
-        let hostingView = NSHostingView(rootView: RecordingOverlayView(phase: .hidden, elapsed: 0, inputLevel: 0))
+        let hostingView = NSHostingView(
+            rootView: RecordingOverlayView(phase: .hidden, elapsed: 0, inputLevel: 0, autoPasteResult: nil)
+        )
         self.hostingView = hostingView
 
         let panel = NSPanel(
@@ -45,17 +47,28 @@ final class RecordingOverlayController {
         panel.contentView = hostingView
         self.panel = panel
 
+        // `combineLatest` de a 4 publishers como máximo por llamada: se anida una segunda vez
+        // para sumar `$lastAutoPasteResult` sin tocar la tupla ya existente. Ese resultado puede
+        // llegar después de que la fase ya esté en `.done` (el paste es async) — ver comentario en
+        // el caso `.done` de `apply(...)` sobre por qué el guard existente ya cubre ese caso común.
         cancellable = viewModel.$state
             .combineLatest(viewModel.$lastTranscriptionOutcome, viewModel.$recordingElapsed, viewModel.$inputLevel)
+            .combineLatest(viewModel.$lastAutoPasteResult)
             .receive(on: DispatchQueue.main)
-            .sink { [weak self, weak viewModel] _, _, elapsed, level in
+            .sink { [weak self, weak viewModel] combined, autoPasteResult in
                 guard let self, let viewModel else { return }
-                self.apply(phase: viewModel.overlayPhase, elapsed: elapsed, level: level)
+                let (_, _, elapsed, level) = combined
+                self.apply(phase: viewModel.overlayPhase, elapsed: elapsed, level: level, autoPasteResult: autoPasteResult)
             }
     }
 
-    private func apply(phase: RecordingOverlayPhase, elapsed: TimeInterval, level: Float) {
-        hostingView.rootView = RecordingOverlayView(phase: phase, elapsed: elapsed, inputLevel: level)
+    private func apply(phase: RecordingOverlayPhase, elapsed: TimeInterval, level: Float, autoPasteResult: AutoPasteResult?) {
+        hostingView.rootView = RecordingOverlayView(
+            phase: phase,
+            elapsed: elapsed,
+            inputLevel: level,
+            autoPasteResult: autoPasteResult
+        )
 
         switch phase {
         case .hidden:

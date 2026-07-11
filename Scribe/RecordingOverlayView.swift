@@ -8,6 +8,10 @@ struct RecordingOverlayView: View {
     let phase: RecordingOverlayPhase
     let elapsed: TimeInterval
     let inputLevel: Float
+    /// Solo se usa en `.done`, para distinguir "transcripción lista" de "transcripción lista y ya
+    /// pegada" (Fase 6). No decide nada del auto-paste, solo refleja lo que
+    /// `DictationViewModel.lastAutoPasteResult` ya resolvió.
+    let autoPasteResult: AutoPasteResult?
 
     private var formattedElapsed: String {
         let totalSeconds = Int(elapsed)
@@ -25,7 +29,7 @@ struct RecordingOverlayView: View {
         case .transcribing:
             return "Transcribiendo..."
         case .done:
-            return "Listo"
+            return autoPasteResult == .pasted ? "Pegado" : "Listo"
         }
     }
 
@@ -120,9 +124,10 @@ private struct TranscribingIndicator: View {
 
 #Preview {
     VStack(spacing: 16) {
-        RecordingOverlayView(phase: .recording, elapsed: 12, inputLevel: 0.6)
-        RecordingOverlayView(phase: .transcribing, elapsed: 0, inputLevel: 0)
-        RecordingOverlayView(phase: .done, elapsed: 0, inputLevel: 0)
+        RecordingOverlayView(phase: .recording, elapsed: 12, inputLevel: 0.6, autoPasteResult: nil)
+        RecordingOverlayView(phase: .transcribing, elapsed: 0, inputLevel: 0, autoPasteResult: nil)
+        RecordingOverlayView(phase: .done, elapsed: 0, inputLevel: 0, autoPasteResult: nil)
+        RecordingOverlayView(phase: .done, elapsed: 0, inputLevel: 0, autoPasteResult: .pasted)
     }
     .padding(40)
     .background(Color.gray)

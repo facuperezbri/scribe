@@ -130,6 +130,11 @@ final class DictationViewModel: ObservableObject {
     /// siempre en cuanto el usuario la descarta (`dismissOnboardingWelcome()`); no vuelve a
     /// aparecer en lanzamientos siguientes ni tiene un botón para volver a mostrarla.
     @Published private(set) var showOnboardingWelcome: Bool
+    /// Preferencia mínima (Fase 6) para desactivar el auto-paste por completo, expuesta como
+    /// toggle en el menú de la barra de menús. Por defecto habilitado, matching el diseño
+    /// "background-first, sin clics extra" — no hay UI para "activarlo de nuevo más tarde" más
+    /// allá de volver a tocar el mismo toggle.
+    @Published private(set) var isAutoPasteEnabled: Bool
 
     private let userDefaults: UserDefaults
     private let audioRecorder: AudioRecordingServicing
@@ -179,6 +184,7 @@ final class DictationViewModel: ObservableObject {
         self.transcriptionAttemptCoordinator = TranscriptionAttemptCoordinator(transcriptionService: self.transcriptionService)
         self.userDefaults = userDefaults
         self.showOnboardingWelcome = !userDefaults.bool(forKey: Self.hasSeenOnboardingWelcomeDefaultsKey)
+        self.isAutoPasteEnabled = !userDefaults.bool(forKey: Self.hasDisabledAutoPasteDefaultsKey)
 
         state = AppState(permission: .notDetermined, model: .missing, session: .idle, error: nil)
         statusText = "Listo"
@@ -637,14 +643,38 @@ final class DictationViewModel: ObservableObject {
     /// `LiveAutoPasteService`) termina. Nunca toca `transcript`/`previousTranscript` — si falla,
     /// el texto ya quedó guardado arriba, disponible para copiar a mano sin importar el resultado.
     /// No hace nada si no hay destino capturado (dictado iniciado desde la propia ventana de
-    /// Scribe, o `captureTarget()` no encontró nada) o si el texto vino vacío.
+    /// Scribe, o `captureTarget()` no encontró nada), si el texto vino vacío, o si el usuario
+    /// desactivó el auto-paste (`isAutoPasteEnabled`, Fase 6). El destino capturado se consume
+    /// (se pone en `nil`) apenas se resuelve su destino, sea cual sea, para no reusarlo por error.
     private func performAutoPasteIfNeeded(text: String) {
-        guard !text.isEmpty, let target = capturedAutoPasteTarget else { return }
+        guard let target = capturedAutoPasteTarget else { return }
         capturedAutoPasteTarget = nil
+        guard isAutoPasteEnabled, !text.isEmpty else { return }
         let service = autoPasteService
         Task { [weak self] in
             let result = await service.paste(text: text, target: target)
             self?.lastAutoPasteResult = result
+        }
+    }
+
+    /// Mensaje corto en español para el menú de la barra de menús (Fase 6), o `nil` cuando no hay
+    /// nada que valga la pena mostrar: éxito silencioso (`.pasted` ya se confirma en la burbuja
+    /// flotante) y los casos sin intento real (`.noTarget`, `.emptyText`) no son fallas, así que no
+    /// generan un mensaje de "algo salió mal". Solo los casos donde hubo un destino y un intento
+    /// real que no llegó a buen puerto valen un aviso — no intrusivo, sin diálogo modal, visible
+    /// solo si el usuario abre el menú.
+    var autoPasteStatusText: String? {
+        switch lastAutoPasteResult {
+        case nil, .pasted, .noTarget, .emptyText:
+            return nil
+        case .targetUnavailable:
+            return "Auto-paste: la app destino ya no está disponible."
+        case .accessibilityPermissionMissing:
+            return "Auto-paste: falta el permiso de Accesibilidad."
+        case .secureField:
+            return "Auto-paste: no se pegó en un campo que parece contraseña."
+        case .pasteboardFailed, .eventPostFailed, .unknown:
+            return "Auto-paste: no se pudo pegar. Usá \"Copiar última transcripción\"."
         }
     }
 
@@ -714,12 +744,23 @@ final class DictationViewModel: ObservableObject {
     }
 
     private static let hasSeenOnboardingWelcomeDefaultsKey = "Scribe.hasSeenOnboardingWelcome"
+    private static let hasDisabledAutoPasteDefaultsKey = "Scribe.hasDisabledAutoPaste"
 
     /// Descarta `OnboardingWelcomeView` para siempre: persiste la marca en `UserDefaults` antes de
     /// apagar el flag, así que no vuelve a aparecer en el próximo lanzamiento.
     func dismissOnboardingWelcome() {
         userDefaults.set(true, forKey: Self.hasSeenOnboardingWelcomeDefaultsKey)
         showOnboardingWelcome = false
+    }
+
+    /// Prende/apaga el auto-paste y persiste la preferencia. Se guarda invertida
+    /// (`hasDisabledAutoPasteDefaultsKey`) para que la ausencia de la clave — el primer
+    /// lanzamiento, antes de que el usuario haya tocado el toggle — signifique "habilitado" sin
+    /// necesitar un valor por defecto explícito en `UserDefaults` (mismo truco que
+    /// `showOnboardingWelcome`/`hasSeenOnboardingWelcomeDefaultsKey`).
+    func setAutoPasteEnabled(_ enabled: Bool) {
+        userDefaults.set(!enabled, forKey: Self.hasDisabledAutoPasteDefaultsKey)
+        isAutoPasteEnabled = enabled
     }
 
     /// Vacía la transcripción y recalcula el estado real (no asume `.idle` sin más): si falta

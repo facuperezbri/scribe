@@ -40,6 +40,10 @@ struct MenuBarContentView: View {
     var body: some View {
         Text("Estado actual: \(viewModel.primaryStateTitle)")
 
+        if let autoPasteStatusText = viewModel.autoPasteStatusText {
+            Text(autoPasteStatusText)
+        }
+
         Divider()
 
         Button(viewModel.isRecording ? "Detener dictado" : "Iniciar dictado") {
@@ -49,6 +53,14 @@ struct MenuBarContentView: View {
 
         Button("Copiar última transcripción", action: viewModel.copyTranscript)
             .disabled(viewModel.transcript.isEmpty)
+
+        Toggle(
+            "Pegado automático",
+            isOn: Binding(
+                get: { viewModel.isAutoPasteEnabled },
+                set: { viewModel.setAutoPasteEnabled($0) }
+            )
+        )
 
         Divider()
 
