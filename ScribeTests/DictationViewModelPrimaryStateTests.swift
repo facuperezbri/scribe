@@ -3,10 +3,20 @@ import XCTest
 
 /// Cubre `primaryState`/`primaryStateTitle`/`primaryStateHint`/`showCopyCallToAction`,
 /// el mapeo de estado a copy del área central de la ventana compacta.
+///
+/// Usa `FakeGlobalHotkeyService` (en vez del `DictationViewModel()` real que usan otros archivos
+/// de test) porque estos casos dependen de `hotkeyStatus`, y el servicio real consulta
+/// `AXIsProcessTrusted()` de verdad: sin un `Fake` fijo, el resultado dependería del permiso de
+/// Accesibilidad de la máquina/build que corre los tests (distinto en un build sin firma real, como
+/// el que usa CI) en vez de ser determinístico.
 @MainActor
 final class DictationViewModelPrimaryStateTests: XCTestCase {
+    private func makeViewModel() -> DictationViewModel {
+        DictationViewModel(globalHotkeyService: FakeGlobalHotkeyService())
+    }
+
     func testReadyState() {
-        let viewModel = DictationViewModel()
+        let viewModel = makeViewModel()
         viewModel.state = AppState(permission: .authorized, model: .installed, session: .idle, error: nil)
         viewModel.transcript = ""
 
@@ -17,7 +27,7 @@ final class DictationViewModelPrimaryStateTests: XCTestCase {
     }
 
     func testRecordingState() {
-        let viewModel = DictationViewModel()
+        let viewModel = makeViewModel()
         viewModel.state = AppState(permission: .authorized, model: .installed, session: .recording, error: nil)
 
         XCTAssertEqual(viewModel.primaryState, .recording)
@@ -27,7 +37,7 @@ final class DictationViewModelPrimaryStateTests: XCTestCase {
     }
 
     func testStoppingState() {
-        let viewModel = DictationViewModel()
+        let viewModel = makeViewModel()
         viewModel.state = AppState(permission: .authorized, model: .installed, session: .stoppingRecording, error: nil)
 
         XCTAssertEqual(viewModel.primaryState, .stoppingRecording)
@@ -35,7 +45,7 @@ final class DictationViewModelPrimaryStateTests: XCTestCase {
     }
 
     func testTranscribingState() {
-        let viewModel = DictationViewModel()
+        let viewModel = makeViewModel()
         viewModel.state = AppState(permission: .authorized, model: .installed, session: .transcribing, error: nil)
 
         XCTAssertEqual(viewModel.primaryState, .transcribing)
@@ -43,7 +53,7 @@ final class DictationViewModelPrimaryStateTests: XCTestCase {
     }
 
     func testTranscriptReadyState() {
-        let viewModel = DictationViewModel()
+        let viewModel = makeViewModel()
         viewModel.state = AppState(permission: .authorized, model: .installed, session: .idle, error: nil)
         viewModel.transcript = "hola mundo"
 
@@ -54,7 +64,7 @@ final class DictationViewModelPrimaryStateTests: XCTestCase {
     }
 
     func testMicrophoneDeniedState() {
-        let viewModel = DictationViewModel()
+        let viewModel = makeViewModel()
         viewModel.state = AppState(permission: .denied, model: .installed, session: .idle, error: nil)
 
         XCTAssertEqual(viewModel.primaryState, .microphoneDenied)
@@ -62,7 +72,7 @@ final class DictationViewModelPrimaryStateTests: XCTestCase {
     }
 
     func testMissingModelState() {
-        let viewModel = DictationViewModel()
+        let viewModel = makeViewModel()
         viewModel.state = AppState(permission: .authorized, model: .missing, session: .idle, error: nil)
 
         XCTAssertEqual(viewModel.primaryState, .missingModel)
@@ -70,7 +80,7 @@ final class DictationViewModelPrimaryStateTests: XCTestCase {
     }
 
     func testDownloadingModelState() {
-        let viewModel = DictationViewModel()
+        let viewModel = makeViewModel()
         viewModel.state = AppState(permission: .authorized, model: .downloading(progress: 0.4), session: .idle, error: nil)
 
         XCTAssertEqual(viewModel.primaryState, .downloadingModel)
@@ -78,7 +88,7 @@ final class DictationViewModelPrimaryStateTests: XCTestCase {
     }
 
     func testAccessibilityRequiredState() {
-        let viewModel = DictationViewModel()
+        let viewModel = makeViewModel()
         viewModel.state = AppState(permission: .authorized, model: .installed, session: .idle, error: nil)
         viewModel.transcript = ""
         viewModel.hotkeyStatus = .accessibilityPermissionRequired
@@ -88,7 +98,7 @@ final class DictationViewModelPrimaryStateTests: XCTestCase {
     }
 
     func testErrorStateTakesPriorityOverEverythingElse() {
-        let viewModel = DictationViewModel()
+        let viewModel = makeViewModel()
         viewModel.state = AppState(
             permission: .denied,
             model: .missing,
@@ -101,7 +111,7 @@ final class DictationViewModelPrimaryStateTests: XCTestCase {
     }
 
     func testActiveSessionOutranksModelAndPermissionBlockers() {
-        let viewModel = DictationViewModel()
+        let viewModel = makeViewModel()
         viewModel.state = AppState(permission: .denied, model: .missing, session: .recording, error: nil)
 
         XCTAssertEqual(viewModel.primaryState, .recording)

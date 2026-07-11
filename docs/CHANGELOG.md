@@ -10,7 +10,9 @@ Housekeeping pass before starting auto-paste: split `DictationViewModel` into fo
 tested controllers (`PermissionStatusController`, `TranscriptSessionController`, `RecordingMeter`,
 `TranscriptionAttemptCoordinator`, `RecordingDurationPolicy`); removed "Fase X"/"MVP" narrative from
 code comments in favor of `DECISIONS.md`; split this README into product docs +
-`CHANGELOG.md`/`ROADMAP.md`/`DECISIONS.md`.
+`CHANGELOG.md`/`ROADMAP.md`/`DECISIONS.md`; added a GitHub Actions CI workflow
+(`.github/workflows/ci.yml`) that runs `xcodegen generate` → resolve package dependencies → build →
+test, unsigned, on every push/PR to `main`.
 
 ## MVP4 — background-first dictation, menu bar item, and floating overlay
 
