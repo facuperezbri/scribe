@@ -138,6 +138,14 @@ final class DictationViewModel: ObservableObject {
     private let recordingMeter: RecordingMeter
     private let transcriptionAttemptCoordinator: TranscriptionAttemptCoordinator
     private(set) var lastRecordingURL: URL?
+    /// App a la que un auto-paste (todavía no implementado, ver Fase 4) volvería a pegar el
+    /// texto una vez transcripto. Se captura de forma sincrónica en `startRecordingIfPossible()`,
+    /// antes de arrancar el `Task` async y antes de cualquier diálogo de permiso que pudiera
+    /// cambiar la app frontmost — `autoPasteService.captureTarget()` ya excluye a Scribe misma,
+    /// así que un dictado arrancado desde el botón de la propia ventana principal deja esto en
+    /// `nil` sin ningún chequeo extra acá. Que sea `nil` no es un error: simplemente no hay
+    /// destino al que pegarle.
+    private(set) var capturedAutoPasteTarget: AutoPasteTarget?
     private var transcriptionTask: Task<Void, Never>?
 
     init(
@@ -419,6 +427,7 @@ final class DictationViewModel: ObservableObject {
     }
 
     private func startRecordingIfPossible() {
+        capturedAutoPasteTarget = autoPasteService.captureTarget()
         state.session = .startingRecording
         lastTranscriptionOutcome = nil
         Task {

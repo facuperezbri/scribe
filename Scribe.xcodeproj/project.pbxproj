@@ -18,6 +18,7 @@
 		21A0F9DF7771CDC6401EF1D1 /* ClipboardService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3D685A22D63623268BD4FC1D /* ClipboardService.swift */; };
 		2F8BB8987DE7DF002FAE58DB /* GlobalHotkeyServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A06EDDB2519C8FB669D3DC78 /* GlobalHotkeyServiceTests.swift */; };
 		31375C3B960866AEB5AB469A /* StoragePaths.swift in Sources */ = {isa = PBXBuildFile; fileRef = 270EB5CBE621E352E36B2C0E /* StoragePaths.swift */; };
+		31C9AB0210D8E26D25107F53 /* DictationViewModelAutoPasteCaptureTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3B64DCA0923FA0ACA030747 /* DictationViewModelAutoPasteCaptureTests.swift */; };
 		3AA4DD75F153C9FF602D0520 /* RecordingMeterTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20DFDB2D846C452C5E6A39BE /* RecordingMeterTests.swift */; };
 		3AE8862F49190AF646BADC97 /* DictationViewModelStateModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 836EFA7D5DCDCAEB03186377 /* DictationViewModelStateModelTests.swift */; };
 		3BE38A3E5F6252F278220281 /* MicrophonePermissionManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7E838D859C563E1B532B8EFC /* MicrophonePermissionManager.swift */; };
@@ -126,6 +127,7 @@
 		BA0C1C6D65E795C43387A7AB /* RecordingOverlayView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecordingOverlayView.swift; sourceTree = "<group>"; };
 		BC12DB7E78A47777348D3637 /* AutoPasteService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AutoPasteService.swift; sourceTree = "<group>"; };
 		BCA7131458FCEDDDC3528E89 /* FileTranscriptStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FileTranscriptStoreTests.swift; sourceTree = "<group>"; };
+		C3B64DCA0923FA0ACA030747 /* DictationViewModelAutoPasteCaptureTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DictationViewModelAutoPasteCaptureTests.swift; sourceTree = "<group>"; };
 		C60E15CB93482FFE51FCB6A8 /* WindowActivationServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowActivationServiceTests.swift; sourceTree = "<group>"; };
 		C7F8EC336858331662965E7A /* AppError.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppError.swift; sourceTree = "<group>"; };
 		CC60939B12CF88612FD94E7D /* RecordingDurationPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecordingDurationPolicy.swift; sourceTree = "<group>"; };
@@ -164,6 +166,7 @@
 			children = (
 				53303B7892A5BA845C8F1C83 /* AppErrorTests.swift */,
 				0AFB149FB14066CC05160141 /* AutoPasteServiceTests.swift */,
+				C3B64DCA0923FA0ACA030747 /* DictationViewModelAutoPasteCaptureTests.swift */,
 				79E161F13FABC356F0163E63 /* DictationViewModelDependencyInjectionTests.swift */,
 				6C1F7B39C8C309178DABFA19 /* DictationViewModelInterruptionTests.swift */,
 				CE3EE590DB31F8368623D8D3 /* DictationViewModelOnboardingTests.swift */,
@@ -340,6 +343,7 @@
 			files = (
 				76A2E342D27FFF91D410AEF6 /* AppErrorTests.swift in Sources */,
 				FBB67A4FFE12CBB8129D1883 /* AutoPasteServiceTests.swift in Sources */,
+				31C9AB0210D8E26D25107F53 /* DictationViewModelAutoPasteCaptureTests.swift in Sources */,
 				8F6E6AF3FA4B196B4191F3B6 /* DictationViewModelDependencyInjectionTests.swift in Sources */,
 				137D25D7095B4CD3C30146FA /* DictationViewModelInterruptionTests.swift in Sources */,
 				4716529AB4419B0229B08D4A /* DictationViewModelOnboardingTests.swift in Sources */,
