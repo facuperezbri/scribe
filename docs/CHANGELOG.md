@@ -17,7 +17,12 @@ test, unsigned, on every push/PR to `main`; extracted `HotkeyTrigger` out of
 inline, as a low-risk fallback seam for hardware where it turns out not to be reliable (see
 `docs/DECISIONS.md`), and expanded the README's manual QA checklist with a dedicated Fn + Espacio
 hardware-validation list (built-in keyboard, Magic Keyboard with/without a dedicated Fn key,
-third-party keyboards, Karabiner-remapped keyboards).
+third-party keyboards, Karabiner-remapped keyboards); added a one-time first-launch welcome card
+(`OnboardingWelcomeView`, gated by a `UserDefaults` flag on `DictationViewModel`) covering privacy,
+permissions, and the Fn + Espacio shortcut in three lines; and did a VoiceOver pass across the main
+window and menu bar icon — decorative icons redundant with adjacent text are now
+`.accessibilityHidden`, multi-line status text is grouped into single VoiceOver stops, and the
+transcript editor and menu bar status icon gained explicit accessibility labels.
 
 ## MVP4 — background-first dictation, menu bar item, and floating overlay
 

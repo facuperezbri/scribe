@@ -50,33 +50,41 @@ struct DictationStatusView: View {
 
     var body: some View {
         VStack(spacing: 12) {
-            ZStack {
-                Circle()
-                    .fill(iconColor.opacity(0.12))
-                    .frame(width: 64, height: 64)
+            VStack(spacing: 12) {
+                ZStack {
+                    Circle()
+                        .fill(iconColor.opacity(0.12))
+                        .frame(width: 64, height: 64)
 
-                Image(systemName: icon)
-                    .font(.system(size: 28, weight: .medium))
-                    .foregroundStyle(iconColor)
-            }
-            .scaleEffect(isPulsing ? 1.12 : 1.0)
-            .animation(
-                isRecording ? .easeInOut(duration: 0.9).repeatForever(autoreverses: true) : .default,
-                value: isPulsing
-            )
-            .onAppear { isPulsing = isRecording }
-            .onChange(of: isRecording) { isPulsing = $0 }
+                    Image(systemName: icon)
+                        .font(.system(size: 28, weight: .medium))
+                        .foregroundStyle(iconColor)
+                }
+                .scaleEffect(isPulsing ? 1.12 : 1.0)
+                .animation(
+                    isRecording ? .easeInOut(duration: 0.9).repeatForever(autoreverses: true) : .default,
+                    value: isPulsing
+                )
+                .onAppear { isPulsing = isRecording }
+                .onChange(of: isRecording) { isPulsing = $0 }
+                // El color/pulso del ícono es puramente decorativo: el título ya dice lo mismo en
+                // palabras, así que VoiceOver no necesita anunciarlo como un elemento aparte.
+                .accessibilityHidden(true)
 
-            Text(title)
-                .font(.title2.weight(.bold))
-                .multilineTextAlignment(.center)
-
-            if let hint {
-                Text(hint)
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
+                Text(title)
+                    .font(.title2.weight(.bold))
                     .multilineTextAlignment(.center)
+
+                if let hint {
+                    Text(hint)
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                }
             }
+            // Agrupa título + hint en un solo elemento para VoiceOver en vez de dos paradas
+            // separadas, sin afectar los controles interactivos que vienen después (Cancelar/Copiar).
+            .accessibilityElement(children: .combine)
 
             if isRecording {
                 RecordingFeedbackView(

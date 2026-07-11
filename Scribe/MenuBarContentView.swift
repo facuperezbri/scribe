@@ -25,6 +25,7 @@ struct MenuBarStatusIcon: View {
 
     var body: some View {
         Image(systemName: systemImageName)
+            .accessibilityLabel(viewModel.primaryStateTitle)
     }
 }
 

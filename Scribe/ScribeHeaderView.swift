@@ -9,12 +9,14 @@ struct ScribeHeaderView: View {
         HStack(spacing: 5) {
             Image(systemName: "waveform")
                 .foregroundStyle(Color.accentColor)
+                .accessibilityHidden(true)
             Text("Scribe")
                 .fontWeight(.semibold)
             Text("· Dictado local")
                 .foregroundStyle(.secondary)
         }
         .font(.footnote)
+        .accessibilityElement(children: .combine)
     }
 }
 

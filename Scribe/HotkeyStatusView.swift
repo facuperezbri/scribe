@@ -17,6 +17,7 @@ struct HotkeyStatusView: View {
             HStack(spacing: 6) {
                 Image(systemName: "keyboard")
                     .foregroundStyle(.secondary)
+                    .accessibilityHidden(true)
                 Text("Fn + Espacio para grabar/detener")
             }
             .font(.caption2)
@@ -26,6 +27,7 @@ struct HotkeyStatusView: View {
                 HStack(spacing: 6) {
                     Image(systemName: "keyboard.badge.exclamationmark")
                         .foregroundStyle(.orange)
+                        .accessibilityHidden(true)
                     Text("Para usar Fn + Espacio desde cualquier app, Scribe necesita permiso de Accesibilidad.")
                         .multilineTextAlignment(.center)
                 }
@@ -50,6 +52,7 @@ struct HotkeyStatusView: View {
             HStack(spacing: 6) {
                 Image(systemName: "keyboard.badge.exclamationmark")
                     .foregroundStyle(.secondary)
+                    .accessibilityHidden(true)
                 Text(message)
                     .multilineTextAlignment(.center)
             }

@@ -5,6 +5,7 @@ struct PrivacyNoteView: View {
     var body: some View {
         HStack(alignment: .top, spacing: 4) {
             Image(systemName: "lock.shield")
+                .accessibilityHidden(true)
             Text("Audio y texto se procesan localmente.")
                 .multilineTextAlignment(.leading)
                 .fixedSize(horizontal: false, vertical: true)

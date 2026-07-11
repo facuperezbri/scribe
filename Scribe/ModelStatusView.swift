@@ -15,6 +15,7 @@ struct ModelStatusView: View {
             HStack(spacing: 6) {
                 Image(systemName: "checkmark.circle.fill")
                     .foregroundStyle(.green)
+                    .accessibilityHidden(true)
                 Text("\(modelName) instalado")
                 Button("Ver en Finder", action: onReveal)
                     .buttonStyle(.link)

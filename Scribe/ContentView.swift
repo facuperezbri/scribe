@@ -6,6 +6,10 @@ struct ContentView: View {
 
     var body: some View {
         VStack(spacing: Metrics.sectionSpacing) {
+            if viewModel.showOnboardingWelcome {
+                OnboardingWelcomeView(onDismiss: viewModel.dismissOnboardingWelcome)
+            }
+
             ScribeHeaderView()
 
             VStack(spacing: Metrics.cardInnerSpacing) {

@@ -120,7 +120,12 @@ final class DictationViewModel: ObservableObject {
     @Published var inputLevel: Float = 0
     @Published var hotkeyStatus: HotkeyStatus = .unknown
     @Published private(set) var lastTranscriptionOutcome: TranscriptionOutcome?
+    /// Tarjeta de bienvenida de primer lanzamiento (`OnboardingWelcomeView`). Se apaga para
+    /// siempre en cuanto el usuario la descarta (`dismissOnboardingWelcome()`); no vuelve a
+    /// aparecer en lanzamientos siguientes ni tiene un botón para volver a mostrarla.
+    @Published private(set) var showOnboardingWelcome: Bool
 
+    private let userDefaults: UserDefaults
     private let audioRecorder: AudioRecordingServicing
     private let transcriptionService: TranscriptionServicing
     private let modelManager: ModelManaging
@@ -142,7 +147,8 @@ final class DictationViewModel: ObservableObject {
         transcriptStore: TranscriptStoring = FileTranscriptStore(),
         globalHotkeyService: GlobalHotkeyServicing = LiveGlobalHotkeyService(),
         windowActivationService: WindowActivationServicing = LiveWindowActivationService(),
-        transcriptionService: TranscriptionServicing? = nil
+        transcriptionService: TranscriptionServicing? = nil,
+        userDefaults: UserDefaults = .standard
     ) {
         self.audioRecorder = audioRecorder
         self.modelManager = modelManager
@@ -154,6 +160,8 @@ final class DictationViewModel: ObservableObject {
         self.transcriptSessionController = TranscriptSessionController(transcriptStore: transcriptStore)
         self.recordingMeter = RecordingMeter(audioRecorder: audioRecorder)
         self.transcriptionAttemptCoordinator = TranscriptionAttemptCoordinator(transcriptionService: self.transcriptionService)
+        self.userDefaults = userDefaults
+        self.showOnboardingWelcome = !userDefaults.bool(forKey: Self.hasSeenOnboardingWelcomeDefaultsKey)
 
         state = AppState(permission: .notDetermined, model: .missing, session: .idle, error: nil)
         statusText = "Listo"
@@ -666,6 +674,15 @@ final class DictationViewModel: ObservableObject {
         guard let previousTranscript else { return }
         transcript = previousTranscript
         self.previousTranscript = nil
+    }
+
+    private static let hasSeenOnboardingWelcomeDefaultsKey = "Scribe.hasSeenOnboardingWelcome"
+
+    /// Descarta `OnboardingWelcomeView` para siempre: persiste la marca en `UserDefaults` antes de
+    /// apagar el flag, así que no vuelve a aparecer en el próximo lanzamiento.
+    func dismissOnboardingWelcome() {
+        userDefaults.set(true, forKey: Self.hasSeenOnboardingWelcomeDefaultsKey)
+        showOnboardingWelcome = false
     }
 
     /// Vacía la transcripción y recalcula el estado real (no asume `.idle` sin más): si falta

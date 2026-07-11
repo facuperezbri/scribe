@@ -13,6 +13,7 @@ struct TranscriptEditorView: View {
             Text("Transcripción")
                 .font(.caption.weight(.medium))
                 .foregroundStyle(.secondary)
+                .accessibilityHidden(true)
 
             // El placeholder y el TextEditor comparten el mismo `.padding(10)`: al aplicarse
             // sobre un Group, SwiftUI lo reparte igual a cada hijo, así quedan alineados
@@ -24,6 +25,8 @@ struct TranscriptEditorView: View {
                     TextEditor(text: $text)
                         .font(.body)
                         .scrollContentBackground(.hidden)
+                        .accessibilityLabel("Transcripción")
+                        .accessibilityHint(text.isEmpty ? "Tu transcripción aparecerá acá" : "")
 
                     if text.isEmpty {
                         Text("Tu transcripción aparecerá acá...")
@@ -31,6 +34,7 @@ struct TranscriptEditorView: View {
                             .foregroundStyle(.secondary)
                             .padding(.leading, 5)
                             .allowsHitTesting(false)
+                            .accessibilityHidden(true)
                     }
                 }
                 .padding(10)
