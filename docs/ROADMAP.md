@@ -6,7 +6,8 @@ for the reasoning behind the current architecture these build on top of.
 
 1. **Auto-paste** — paste the transcription result directly into whichever app was focused before
    the shortcut was pressed, instead of requiring a manual "Copiar" + ⌘V. The global Fn + Espacio
-   shortcut, its permission UX, and window activation are already in place as building blocks.
+   shortcut, its permission UX, and window activation are already in place as building blocks. See
+   [MVP5_AUTO_PASTE_PLAN.md](MVP5_AUTO_PASTE_PLAN.md) for the readiness/design notes.
 2. **Live transcription** — show a partial transcript while still recording, instead of waiting for
    "Detener".
 3. **Transcript history** — a real history of past transcriptions; today only the last one is

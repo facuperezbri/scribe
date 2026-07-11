@@ -22,7 +22,10 @@ third-party keyboards, Karabiner-remapped keyboards); added a one-time first-lau
 permissions, and the Fn + Espacio shortcut in three lines; and did a VoiceOver pass across the main
 window and menu bar icon — decorative icons redundant with adjacent text are now
 `.accessibilityHidden`, multi-line status text is grouped into single VoiceOver stops, and the
-transcript editor and menu bar status icon gained explicit accessibility labels.
+transcript editor and menu bar status icon gained explicit accessibility labels; and added
+`docs/MVP5_AUTO_PASTE_PLAN.md`, a readiness doc for the next roadmap item (auto-paste) covering what
+existing building blocks it can reuse, what's still missing (a paste mechanism, clipboard-restore
+behavior, secure-field handling), and open questions to resolve before implementation starts.
 
 ## MVP4 — background-first dictation, menu bar item, and floating overlay
 
