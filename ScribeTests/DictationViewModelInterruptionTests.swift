@@ -1,7 +1,7 @@
 import XCTest
 @testable import Scribe
 
-/// Cubre la Fase 8: una interrupción de grabación reportada por `AudioRecordingServicing`
+/// Cubre que una interrupción de grabación reportada por `AudioRecordingServicing`
 /// (delegate de AVAudioRecorder en la implementación real) se convierte en un `AppError`
 /// tipado y devuelve la sesión a `.idle`, sin depender de hardware de audio real.
 @MainActor

@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Contenido de la burbuja flotante (Fase 5 de MVP4): una cápsula compacta y oscura, sin cromo de
+/// Contenido de la burbuja flotante: una cápsula compacta y oscura, sin cromo de
 /// ventana, pensada para flotar por encima de lo que el usuario esté haciendo sin robarle
 /// atención. Diseño propio — no reproduce el de ningún dictado-utility de terceros: en vez del
 /// punto pulsante típico, usa tres barritas que responden al nivel real del micrófono.

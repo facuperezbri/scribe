@@ -1,7 +1,7 @@
 import Foundation
 
-/// Sondea tiempo transcurrido y nivel de entrada mientras se graba, en su propio `Task` (Fase 8
-/// del rediseño estilo Wispr, extraído de `DictationViewModel`). Vive fuera del view model para
+/// Sondea tiempo transcurrido y nivel de entrada mientras se graba, en su propio `Task`. Vive
+/// fuera del view model para
 /// que este no tenga que administrar el `Task` de polling además del resto del flujo de
 /// grabar/detener/transcribir.
 @MainActor

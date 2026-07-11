@@ -1,7 +1,7 @@
 import AppKit
 import Foundation
 
-/// Contrato mínimo para traer la ventana principal de Scribe al frente (Fase 7 de MVP3). No sabe
+/// Contrato mínimo para traer la ventana principal de Scribe al frente. No sabe
 /// nada de grabar, transcribir ni de las reglas de negocio de `DictationViewModel`: solo expone
 /// "activar la ventana principal", para que el atajo global pueda pedirlo sin que la lógica de
 /// grabar/detener viva en dos lugares.

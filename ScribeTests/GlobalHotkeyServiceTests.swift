@@ -6,8 +6,8 @@ import XCTest
 /// teclado real) y que `DictationViewModel` conecta el callback del atajo global con
 /// `handlePrimaryDictationAction(source: .globalHotkey)` sin duplicar el flujo de grabar/detener.
 ///
-/// Los casos que ejercitan `DictationViewModel` completo (atajo en modo toggle, Fn + Espacio desde
-/// la Fase 9, antes Option solo en la Fase 5 de MVP3) simulan la presión del atajo a través de
+/// Los casos que ejercitan `DictationViewModel` completo (atajo en modo toggle, Fn + Espacio)
+/// simulan la presión del atajo a través de
 /// `FakeGlobalHotkeyService.simulateHotkeyPressed()`, nunca con un evento real de teclado — eso es
 /// justamente lo que `LiveGlobalHotkeyService` traduce a esa llamada, y queda fuera del alcance de
 /// un test unitario. La lógica real de detección de `keyCode`/`.function`/`isARepeat` de
@@ -125,8 +125,7 @@ final class GlobalHotkeyServiceTests: XCTestCase {
         XCTAssertEqual(viewModel.state.session, .transcribing)
     }
 
-    /// Regla de comportamiento 4 (revisada en la Fase 2 del rediseño estilo Wispr): con una
-    /// transcripción no vacía, el atajo la reemplaza directo, igual que el botón — ya no hay
+    /// Con una transcripción no vacía, el atajo la reemplaza directo, igual que el botón — ya no hay
     /// confirmación bloqueante antes de grabar.
     func testGlobalHotkeyPressWithNonEmptyTranscriptStartsImmediately() async {
         let hotkeyService = FakeGlobalHotkeyService()
@@ -199,7 +198,7 @@ final class GlobalHotkeyServiceTests: XCTestCase {
         XCTAssertEqual(viewModel.state.session, .recording)
     }
 
-    // MARK: - Fase 6: estado del atajo y permiso de Accesibilidad
+    // MARK: - Estado del atajo y permiso de Accesibilidad
 
     func testHotkeyStatusReflectsActiveAfterInit() {
         let hotkeyService = FakeGlobalHotkeyService()
@@ -209,7 +208,7 @@ final class GlobalHotkeyServiceTests: XCTestCase {
         XCTAssertEqual(viewModel.hotkeyStatus, .active)
     }
 
-    /// El registro sigue instalando el monitor (Fase 5) y solo el `AXIsProcessTrusted` falla;
+    /// El registro sigue instalando el monitor y solo el `AXIsProcessTrusted` falla;
     /// eso no debe impedir que la app arranque ni tumbar `init`.
     func testHotkeyStatusReflectsAccessibilityPermissionRequiredAfterInit() {
         let hotkeyService = FakeGlobalHotkeyService()
@@ -300,7 +299,7 @@ final class GlobalHotkeyServiceTests: XCTestCase {
         XCTAssertEqual(service.currentStatus(), .unknown)
     }
 
-    // MARK: - Fase 9: detección real de Fn + Espacio (LiveGlobalHotkeyService.handleKeyDown)
+    // MARK: - Detección real de Fn + Espacio (LiveGlobalHotkeyService.handleKeyDown)
     //
     // Estos tests ejercitan la lógica real de detección con eventos sintéticos construidos vía
     // `NSEvent.keyEvent`, sin depender de un teclado real ni de un monitor global entregando
@@ -399,7 +398,7 @@ final class GlobalHotkeyServiceTests: XCTestCase {
         XCTAssertEqual(pressCount, 1)
     }
 
-    // MARK: - Fase 2 de MVP4: monitor local (Scribe en foreground)
+    // MARK: - Monitor local (Scribe en foreground)
 
     /// `handleLocalKeyDown` es lo que el monitor local invoca por cada evento mientras Scribe es
     /// la app activa: debe disparar el atajo con la misma lógica que el monitor global.

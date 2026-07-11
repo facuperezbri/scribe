@@ -1,9 +1,8 @@
 import SwiftUI
 
-/// Escala compartida de espaciado y radios (Fase 3 del rediseño estilo Wispr): antes cada vista
-/// definía sus propios números sueltos (14, 10, 8, 6, 4...) sin relación entre sí, lo que hacía
-/// que la ventana se sintiera un prototipo. Un solo lugar para estos valores evita que vuelvan a
-/// divergir.
+/// Escala compartida de espaciado y radios: antes cada vista definía sus propios números sueltos
+/// (14, 10, 8, 6, 4...) sin relación entre sí, lo que hacía que la ventana se sintiera un
+/// prototipo. Un solo lugar para estos valores evita que vuelvan a divergir.
 enum Metrics {
     static let cardCornerRadius: CGFloat = 14
     static let controlCornerRadius: CGFloat = 10

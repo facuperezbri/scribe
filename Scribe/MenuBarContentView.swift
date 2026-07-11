@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Ícono de la barra de menús (Fase 4 de MVP4): un símbolo distinto por estado amplio (reposo,
+/// Ícono de la barra de menús: un símbolo distinto por estado amplio (reposo,
 /// grabando, transcribiendo/ocupado, requiere atención). `MenuBarExtra` renderiza `Image(systemName:)`
 /// como plantilla monocromática por defecto, así que se adapta sola a modo claro/oscuro sin tocar
 /// color acá. No reutiliza el mapeo (con color) de `DictationStatusView`: a este tamaño alcanza con
@@ -28,7 +28,7 @@ struct MenuBarStatusIcon: View {
     }
 }
 
-/// Contenido del menú de la barra de menús (Fase 4 de MVP4): acciones rápidas de un utilitario en
+/// Contenido del menú de la barra de menús: acciones rápidas de un utilitario en
 /// background, todas delegando en `DictationViewModel` — el mismo punto de entrada centralizado
 /// que ya usan el botón de la ventana principal y el atajo global, para no duplicar la lógica de
 /// grabar/detener/transcribir.

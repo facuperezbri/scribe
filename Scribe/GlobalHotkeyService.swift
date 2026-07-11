@@ -19,7 +19,7 @@ enum GlobalHotkeyServiceError: LocalizedError {
     }
 }
 
-/// Estado observable del atajo global, para que la UI (Fase 6 de MVP3) pueda explicarle al
+/// Estado observable del atajo global, para que la UI pueda explicarle al
 /// usuario por qué Fn + Espacio no anda sin conocer nada de `NSEvent`/`AXIsProcessTrusted` por
 /// debajo.
 enum HotkeyStatus: Equatable {
@@ -56,7 +56,7 @@ protocol GlobalHotkeyServicing {
 }
 
 /// Implementación real de `GlobalHotkeyServicing`: detecta Fn + Espacio como atajo global de
-/// toggle (Fase 9, migrado desde Option solo de la Fase 5 de MVP3).
+/// toggle. Ver `docs/DECISIONS.md` para la motivación de elegir Fn + Espacio sobre Option solo.
 ///
 /// ## Enfoque elegido
 /// Fn + Espacio combina un modificador (Fn) con una tecla "no modificadora" real (Space, keyCode
@@ -64,9 +64,9 @@ protocol GlobalHotkeyServicing {
 /// más liviana solo por simplicidad: esa API sí acepta esta combinación, pero se mantiene
 /// `NSEvent.addGlobalMonitorForEvents(matching:)` para no introducir un segundo mecanismo de
 /// registro de atajos en el proyecto y porque el modelo de permisos (ver abajo) es idéntico al que
-/// ya usaba el monitor de Option. La diferencia con la Fase 5 es la máscara de eventos: en vez de
-/// `flagsChanged` (que solo informa cambios de modificadores, sin contenido de tecla) ahora se
-/// observa `.keyDown`, chequeando `keyCode == 49` y que `modifierFlags` incluya `.function`.
+/// ya usaba el monitor de Option. La detección usa `.keyDown` (en vez de `flagsChanged`, que solo
+/// informa cambios de modificadores, sin contenido de tecla), chequeando `keyCode == 49` y que
+/// `modifierFlags` incluya `.function`.
 ///
 /// Se descartó Option solo porque bloquea el uso normal de Option para acentos/diacríticos del
 /// teclado en español (Option+E, Option+U, etc. para á/é/í/ó/ú, ü) — Fn + Espacio no colisiona con
@@ -92,11 +92,10 @@ protocol GlobalHotkeyServicing {
 /// `AXIsProcessTrusted()` (sin mostrar el diálogo nativo, para no pedir permiso fuera de este
 /// flujo) únicamente para decidir si lanza `GlobalHotkeyServiceError.accessibilityPermissionDenied`
 /// y para dejarlo en `lastRegistrationError`. `DictationViewModel` sigue llamando `start` con
-/// `try?`, así que el throw no rompe nada más que arranque la app; `currentStatus()` (Fase 6 de
-/// MVP3) es la vía por la que la UI se entera de ese estado y lo vuelve a consultar sin reiniciar
-/// el servicio.
+/// `try?`, así que el throw no rompe nada más que arranque la app; `currentStatus()` es la vía
+/// por la que la UI se entera de ese estado y lo vuelve a consultar sin reiniciar el servicio.
 ///
-/// ## Local + global (Fase 2 de MVP4)
+/// ## Local + global
 /// `NSEvent.addGlobalMonitorForEvents` únicamente entrega eventos destinados a *otras* apps: en
 /// cuanto Scribe pasa a ser la app activa (p. ej. porque el usuario abrió la ventana principal),
 /// el sistema deja de mandarle esos eventos al monitor global y los despacha por el camino normal
@@ -116,7 +115,7 @@ protocol GlobalHotkeyServicing {
 ///   checklist de QA manual.
 /// - Igual que antes con Option: si se suelta un modificador extra mientras Fn + Space sigue
 ///   presionado, o viceversa, puede interpretarse como una presión nueva del atajo. Caso borde
-///   aceptado para este MVP.
+///   aceptado.
 /// - Todavía no hay modo "mantener presionado" (hold-to-talk); ver el TODO en `handleKeyDown`.
 final class LiveGlobalHotkeyService: GlobalHotkeyServicing {
     /// keyCode físico de la barra espaciadora, independiente de layout de teclado (no es un
@@ -200,7 +199,7 @@ final class LiveGlobalHotkeyService: GlobalHotkeyServicing {
     /// segundo. `internal` (no `private`) para que los tests puedan invocarlo directamente con
     /// eventos sintéticos construidos vía `NSEvent.keyEvent(...)`, sin depender de un teclado real.
     ///
-    /// TODO(post-MVP3): agregar modo "mantener presionado" (hold-to-talk) como alternativa al
+    /// TODO: agregar modo "mantener presionado" (hold-to-talk) como alternativa al
     /// toggle actual — probablemente distinguiendo el primer `keyDown` (ya disponible acá) de un
     /// `keyUp` posterior de Space.
     func handleKeyDown(_ event: NSEvent) {

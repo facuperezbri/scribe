@@ -2,13 +2,13 @@ import AppKit
 import Combine
 import SwiftUI
 
-/// Dueño de la burbuja flotante (Fase 5 de MVP4): un `NSPanel` sin foco propio y no activable que
+/// Dueño de la burbuja flotante: un `NSPanel` sin foco propio y no activable que
 /// solo refleja `viewModel.overlayPhase` — no decide nada por su cuenta, así que no duplica el
 /// flujo centralizado de `DictationViewModel`. Vive en AppKit, fuera del árbol de `Scene` de
 /// `ScribeApp`, porque un panel `.nonactivatingPanel` con `orderFrontRegardless()` no tiene
 /// equivalente directo en SwiftUI: cualquier `Window`/`WindowGroup` puede terminar activando la
-/// app y robándole el foco a la app en la que esté el usuario, justo lo que Fase 3 evitó para el
-/// atajo global.
+/// app y robándole el foco a la app en la que esté el usuario, justo lo que evita el atajo global
+/// (ver `docs/DECISIONS.md`).
 @MainActor
 final class RecordingOverlayController {
     private let panel: NSPanel

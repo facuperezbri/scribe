@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Área central de la ventana compacta (Fase 8): un ícono grande y un título fijo por
+/// Área central de la ventana compacta: un ícono grande y un título fijo por
 /// `PrimaryState`, con el detalle de grabación/transcripción ya existente (`RecordingFeedbackView`,
 /// `TranscribingFeedbackView`) anidado adentro en vez de repetido como hermano en `ContentView`,
 /// y un botón de "Copiar" destacado cuando la transcripción está lista — es el único punto de

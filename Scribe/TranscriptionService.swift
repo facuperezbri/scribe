@@ -24,7 +24,7 @@ final class TranscriptionService: TranscriptionServicing {
     private var whisperKit: WhisperKit?
     private var loadedModelFolder: URL?
 
-    // TODO(Fase 5+): permitir inglés o auto-detección desde una pantalla de configuración.
+    // TODO: permitir inglés o auto-detección desde una pantalla de configuración.
     private let language = "es"
 
     init(modelManager: ModelManaging) {

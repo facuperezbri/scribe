@@ -1,7 +1,7 @@
 import XCTest
 @testable import Scribe
 
-/// Cubre `overlayPhase`/`lastTranscriptionOutcome` (Fase 5 de MVP4): la señal que consume la
+/// Cubre `overlayPhase`/`lastTranscriptionOutcome`: la señal que consume la
 /// burbuja flotante para saber cuándo mostrarse (grabando/transcribiendo), cuándo mostrar "Listo"
 /// brevemente (solo tras un éxito) y cuándo ocultarse sin más (fracaso, cancelación, o cualquier
 /// reposo que no sea "recién terminó bien" — por ejemplo, al abrir la app con una transcripción

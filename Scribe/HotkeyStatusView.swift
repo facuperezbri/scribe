@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Estado del atajo global de Fn + Espacio (Fase 6 de MVP3, actualizado en Fase 9), presentado de
+/// Estado del atajo global de Fn + Espacio, presentado de
 /// forma subordinada al resto de la UI — mismo lugar y estilo que
 /// `ModelStatusView`/`PrivacyNoteView`, no un banner que compita con el flujo principal de
 /// grabar/detener.

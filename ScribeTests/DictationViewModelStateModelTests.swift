@@ -1,9 +1,9 @@
 import XCTest
 @testable import Scribe
 
-/// Cubre las garantías nuevas del modelo de estado dimensional: un único punto de entrada
-/// (`handlePrimaryDictationAction`) que sirve tanto para la UI como para un origen futuro
-/// (atajo global de MVP3), seguro ante toques repetidos, y que limpia `state.error` cuando
+/// Cubre las garantías del modelo de estado dimensional: un único punto de entrada
+/// (`handlePrimaryDictationAction`) que sirve tanto para la UI como para el atajo global,
+/// seguro ante toques repetidos, y que limpia `state.error` cuando
 /// un reintento tiene éxito.
 @MainActor
 final class DictationViewModelStateModelTests: XCTestCase {

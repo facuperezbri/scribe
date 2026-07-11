@@ -1,8 +1,8 @@
 import XCTest
 @testable import Scribe
 
-/// Cubre los flujos completos de la Fase 7: acciones bloqueadas mientras el view model está
-/// ocupado, las dos confirmaciones destructivas (reemplazar o limpiar una transcripción no
+/// Cubre los flujos completos de grabar/detener/transcribir: acciones bloqueadas mientras el view
+/// model está ocupado, las confirmaciones destructivas (reemplazar o limpiar una transcripción no
 /// vacía) y el mapeo de errores de transcripción a `AppError`. Los estados iniciales
 /// (modelo instalado+permiso autorizado / modelo faltante / micrófono denegado) y la
 /// restauración de la última transcripción ya están cubiertos en

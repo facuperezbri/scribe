@@ -22,7 +22,7 @@ enum DictationSessionState: Equatable {
     case transcribing
 }
 
-/// Resultado del intento de transcripción más reciente (Fase 5 de MVP4), para que el overlay
+/// Resultado del intento de transcripción más reciente, para que el overlay
 /// flotante sepa si el paso a `.idle` que sigue a `.transcribing` fue un éxito (mostrar "Listo"
 /// brevemente) o un fracaso/cancelación (ocultarse sin más, sin mostrar nada erróneo como si
 /// hubiera terminado bien). `state.error` no alcanza por sí solo: distingue "hay un error" de
@@ -35,7 +35,7 @@ enum TranscriptionOutcome: Equatable {
     case cancelled
 }
 
-/// Fase de la burbuja flotante no intrusiva (Fase 5 de MVP4). Deliberadamente más angosta que
+/// Fase de la burbuja flotante no intrusiva. Deliberadamente más angosta que
 /// `PrimaryState`: la burbuja no existe para reflejar todo el estado de la app (eso ya lo hace la
 /// ventana principal y el ítem de la barra de menús), solo para acompañar sin robar foco mientras
 /// se graba/transcribe, y confirmar brevemente que terminó bien.
@@ -65,16 +65,16 @@ enum StatusKind: Equatable {
 }
 
 /// Acción destructiva que espera confirmación explícita del usuario antes de ejecutarse. Grabar
-/// de nuevo sobre una transcripción existente ya no pasa por acá (Fase 2 del rediseño estilo
-/// Wispr): en vez de bloquear con un diálogo, `DictationViewModel` guarda esa transcripción en
-/// `previousTranscript` y arranca a grabar directo, así que solo queda `.clearTranscript`.
+/// de nuevo sobre una transcripción existente ya no pasa por acá: en vez de bloquear con un
+/// diálogo, `DictationViewModel` guarda esa transcripción en `previousTranscript` y arranca a
+/// grabar directo, así que solo queda `.clearTranscript`.
 enum PendingConfirmation: Equatable {
     case clearTranscript
 }
 
 /// Origen de una acción de grabar/detener: la ventana principal (`.userInterface`), el atajo
 /// global de teclado (`.globalHotkey`) o el ítem "Iniciar dictado"/"Detener dictado" de la barra
-/// de menús (`.menuBar`, Fase 4 de MVP4). Los tres invocan exactamente `handlePrimaryDictationAction`
+/// de menús (`.menuBar`). Los tres invocan exactamente `handlePrimaryDictationAction`
 /// en vez de duplicar la lógica de grabar/detener/transcribir.
 enum DictationActionSource: Equatable {
     case userInterface
@@ -82,7 +82,7 @@ enum DictationActionSource: Equatable {
     case menuBar
 }
 
-/// Estado "grande" que ve el usuario en el área central de la ventana compacta (Fase 8),
+/// Estado "grande" que ve el usuario en el área central de la ventana compacta,
 /// derivado de `AppState` + transcripción + estado del atajo global. Existe separado de
 /// `statusText` (que sigue siendo el detalle chico, ad hoc por transición) porque necesita
 /// un texto fijo y predecible por caso para el título grande, sin importar en qué paso
@@ -111,8 +111,8 @@ final class DictationViewModel: ObservableObject {
     }
     @Published var showCopiedFeedback = false
     @Published var pendingConfirmation: PendingConfirmation?
-    /// Transcripción que existía justo antes de que una nueva grabación la reemplazara (Fase 2
-    /// del rediseño estilo Wispr), para poder recuperarla con `restorePreviousTranscript()`. Es
+    /// Transcripción que existía justo antes de que una nueva grabación la reemplazara,
+    /// para poder recuperarla con `restorePreviousTranscript()`. Es
     /// un único búfer en memoria, no un historial: se pisa con cada reemplazo nuevo y se vacía al
     /// usarse, para dar una red de seguridad liviana sin construir un producto de historial.
     @Published private(set) var previousTranscript: String?
@@ -170,16 +170,15 @@ final class DictationViewModel: ObservableObject {
             }
         }
 
-        // Conecta el atajo global (Fn + Espacio, Fase 9 — antes Option solo en la Fase 5 de MVP3)
-        // al mismo punto de entrada que usa el botón de la UI, sin duplicar lógica de grabar/
-        // detener. `try?` porque el registro
-        // puede fallar sin permiso de Accesibilidad (ver `LiveGlobalHotkeyService`); eso no debe
-        // impedir que el resto de la app arranque, y el monitor queda instalado igual para cuando
-        // el permiso se otorgue. Fase 3 de MVP4: ya no se llama a `windowActivationService.
-        // activateMainWindow()` acá — el atajo pasó a ser "background-first" (como Wispr Flow):
-        // grabar/detener no debe robarle el foco a la app en la que está el usuario. Traer la
-        // ventana al frente queda reservado para una acción explícita del usuario (p. ej. "Mostrar
-        // Scribe" del menú de la barra de menús, Fase 4), no para cada presión del atajo.
+        // Conecta el atajo global (Fn + Espacio) al mismo punto de entrada que usa el botón de la
+        // UI, sin duplicar lógica de grabar/detener. `try?` porque el registro puede fallar sin
+        // permiso de Accesibilidad (ver `LiveGlobalHotkeyService`); eso no debe impedir que el
+        // resto de la app arranque, y el monitor queda instalado igual para cuando el permiso se
+        // otorgue. No se llama a `windowActivationService.activateMainWindow()` acá — el atajo es
+        // "background-first": grabar/detener no debe robarle el foco a la app en la que está el
+        // usuario. Traer la ventana al frente queda reservado para una acción explícita del
+        // usuario (p. ej. "Mostrar Scribe" del menú de la barra de menús), no para cada presión
+        // del atajo. Ver `docs/DECISIONS.md`.
         try? self.globalHotkeyService.start { [weak self] in
             self?.handlePrimaryDictationAction(source: .globalHotkey)
         }
@@ -295,7 +294,7 @@ final class DictationViewModel: ObservableObject {
         state.session == .recording && RecordingDurationPolicy.warning(forElapsed: recordingElapsed) == .strong
     }
 
-    /// Resuelve el `PrimaryState` para el área central de la ventana compacta (Fase 8). El
+    /// Resuelve el `PrimaryState` para el área central de la ventana compacta. El
     /// orden importa: una sesión en curso (grabando/transcribiendo/etc.) manda siempre, porque
     /// es la verdad más urgente y en vivo, incluso si en paralelo falta el modelo o el permiso
     /// de Accesibilidad no está otorgado (ninguno de los dos bloquea grabar). Recién en reposo
@@ -322,7 +321,7 @@ final class DictationViewModel: ObservableObject {
         return .ready
     }
 
-    /// Fase de la burbuja flotante (Fase 5 de MVP4): a diferencia de `primaryState`, no le
+    /// Fase de la burbuja flotante: a diferencia de `primaryState`, no le
     /// importan permiso/modelo/Accesibilidad ni la transcripción en sí — solo grabar/transcribir
     /// y el instante posterior al éxito (`.done`, breve, para mostrar "Listo" y desaparecer).
     /// `lastTranscriptionOutcome` es lo que distingue ese instante de un reposo cualquiera (por
@@ -370,9 +369,9 @@ final class DictationViewModel: ObservableObject {
     }
 
     /// Punto único de entrada para una acción de grabar/detener, sin importar de dónde venga:
-    /// hoy solo el botón de la UI, más adelante también el atajo de teclado global de MVP3
-    /// (pasando `source: .globalHotkey`). Ambos orígenes comparten exactamente esta lógica,
-    /// así que MVP3 no necesita duplicar el flujo de negocio, solo invocar esta función.
+    /// el botón de la UI, el atajo de teclado global (pasando `source: .globalHotkey`) o el ítem
+    /// de la barra de menús. Todos los orígenes comparten exactamente esta lógica, sin duplicar
+    /// el flujo de negocio.
     ///
     /// La seguridad ante toques repetidos no depende de un flag aparte: `startRecordingIfPossible()`
     /// deja `state.session` en `.startingRecording` de forma sincrónica antes de lanzar el
@@ -384,10 +383,9 @@ final class DictationViewModel: ObservableObject {
         case .recording:
             stopRecording()
         case .idle:
-            // Grabar de nuevo con una transcripción existente ya no pide confirmación (Fase 2 del
-            // rediseño estilo Wispr): arranca directo y la transcripción reemplazada queda en
-            // `previousTranscript` (ver `transcribe(url:)`), recuperable con
-            // `restorePreviousTranscript()`.
+            // Grabar de nuevo con una transcripción existente ya no pide confirmación: arranca
+            // directo y la transcripción reemplazada queda en `previousTranscript` (ver
+            // `transcribe(url:)`), recuperable con `restorePreviousTranscript()`.
             startRecordingIfPossible()
         default:
             break
@@ -460,23 +458,23 @@ final class DictationViewModel: ObservableObject {
     }
 
     /// Vuelve a consultar el estado del atajo global sin reiniciar el servicio. Se llama al
-    /// volver a la app desde Ajustes del Sistema (Fase 6 de MVP3) y también puede ofrecerse como
+    /// volver a la app desde Ajustes del Sistema y también puede ofrecerse como
     /// botón explícito ("Revisar permiso") para el mismo efecto.
     func refreshHotkeyStatus() {
         hotkeyStatus = globalHotkeyService.currentStatus()
     }
 
-    /// Conecta la acción `openWindow` de SwiftUI con `WindowActivationServicing` (Fase 7 de
-    /// MVP3), para el caso en que el atajo global se presiona después de que el usuario cerró la
-    /// ventana principal del todo. `ContentView` llama esto una sola vez al aparecer, porque un
-    /// servicio plano fuera de la jerarquía de vistas no tiene `@Environment` propio.
+    /// Conecta la acción `openWindow` de SwiftUI con `WindowActivationServicing`, para el caso en
+    /// que el atajo global se presiona después de que el usuario cerró la ventana principal del
+    /// todo. `ContentView` llama esto una sola vez al aparecer, porque un servicio plano fuera de
+    /// la jerarquía de vistas no tiene `@Environment` propio.
     func registerWindowReopenHandler(_ handler: @escaping () -> Void) {
         windowActivationService.registerReopenHandler(handler)
     }
 
-    /// Trae la ventana principal al frente de forma explícita (Fase 4 de MVP4): ahora que el
-    /// atajo global ya no lo hace por su cuenta (Fase 3), esta es la única vía prevista para
-    /// mostrarla bajo demanda — hoy la usa "Mostrar Scribe" del menú de la barra de menús.
+    /// Trae la ventana principal al frente de forma explícita: el atajo global no lo hace por su
+    /// cuenta (ver `docs/DECISIONS.md`), así que esta es la única vía prevista para mostrarla
+    /// bajo demanda — hoy la usa "Mostrar Scribe" del menú de la barra de menús.
     func showMainWindow() {
         windowActivationService.activateMainWindow()
     }
@@ -579,11 +577,10 @@ final class DictationViewModel: ObservableObject {
             return
 
         case .success(let text):
-            // TODO(modo append, post-MVP2): hoy cada transcripción reemplaza la anterior;
-            // en algún momento se podría agregar un modo que concatene en vez de sobrescribir.
-            // Justo antes de perderla, se guarda como red de seguridad (Fase 2): ya no hay
-            // confirmación bloqueante antes de este punto, así que esta es la única chance de
-            // recuperar el texto anterior.
+            // TODO(modo append): hoy cada transcripción reemplaza la anterior; en algún momento
+            // se podría agregar un modo que concatene en vez de sobrescribir. Justo antes de
+            // perderla, se guarda como red de seguridad: no hay confirmación bloqueante antes de
+            // este punto, así que esta es la única chance de recuperar el texto anterior.
             if !transcript.isEmpty {
                 previousTranscript = transcript
             }

@@ -1,7 +1,7 @@
 import XCTest
 @testable import Scribe
 
-/// Cubre `primaryState`/`primaryStateTitle`/`primaryStateHint`/`showCopyCallToAction` (Fase 8),
+/// Cubre `primaryState`/`primaryStateTitle`/`primaryStateHint`/`showCopyCallToAction`,
 /// el mapeo de estado a copy del área central de la ventana compacta.
 @MainActor
 final class DictationViewModelPrimaryStateTests: XCTestCase {
