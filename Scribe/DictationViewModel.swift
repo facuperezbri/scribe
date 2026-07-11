@@ -124,27 +124,15 @@ final class DictationViewModel: ObservableObject {
     private let audioRecorder: AudioRecordingServicing
     private let transcriptionService: TranscriptionServicing
     private let modelManager: ModelManaging
-    private let microphonePermissionManager: MicrophonePermissionManaging
     private let clipboardService: ClipboardServicing
-    private let transcriptStore: TranscriptStoring
     private let globalHotkeyService: GlobalHotkeyServicing
     private let windowActivationService: WindowActivationServicing
+    private let permissionStatusController: PermissionStatusController
+    private let transcriptSessionController: TranscriptSessionController
+    private let recordingMeter: RecordingMeter
+    private let transcriptionAttemptCoordinator: TranscriptionAttemptCoordinator
     private(set) var lastRecordingURL: URL?
-    private var meterTask: Task<Void, Never>?
     private var transcriptionTask: Task<Void, Never>?
-    private var pendingTranscriptSaveTask: Task<Void, Never>?
-    /// Identifica el intento de transcripción en curso, para descartar un resultado que
-    /// llega tarde (tras cancelar, o tras haber arrancado una grabación nueva) sin importar
-    /// qué caso tenga `state.session` en ese momento: comparar contra este id es la única
-    /// forma confiable de saber si un resultado async sigue siendo relevante.
-    private var currentTranscriptionAttempt: UUID?
-
-    private static let restrictedMicrophoneError = AppError(
-        category: .microphonePermission,
-        message: "El acceso al micrófono está restringido en este equipo (gestión parental o de la organización). No se puede habilitar desde la app."
-    )
-    private static let softWarningThreshold: TimeInterval = 120
-    private static let strongWarningThreshold: TimeInterval = 300
 
     init(
         audioRecorder: AudioRecordingServicing = AudioRecorderService(),
@@ -158,17 +146,19 @@ final class DictationViewModel: ObservableObject {
     ) {
         self.audioRecorder = audioRecorder
         self.modelManager = modelManager
-        self.microphonePermissionManager = microphonePermissionManager
         self.clipboardService = clipboardService
-        self.transcriptStore = transcriptStore
         self.globalHotkeyService = globalHotkeyService
         self.windowActivationService = windowActivationService
         self.transcriptionService = transcriptionService ?? TranscriptionService(modelManager: modelManager)
+        self.permissionStatusController = PermissionStatusController(microphonePermissionManager: microphonePermissionManager)
+        self.transcriptSessionController = TranscriptSessionController(transcriptStore: transcriptStore)
+        self.recordingMeter = RecordingMeter(audioRecorder: audioRecorder)
+        self.transcriptionAttemptCoordinator = TranscriptionAttemptCoordinator(transcriptionService: self.transcriptionService)
 
         state = AppState(permission: .notDetermined, model: .missing, session: .idle, error: nil)
         statusText = "Listo"
 
-        if let saved = transcriptStore.loadTranscript(), !saved.isEmpty {
+        if let saved = transcriptSessionController.loadSavedTranscript(), !saved.isEmpty {
             transcript = saved
         }
         state = steadyState()
@@ -200,12 +190,12 @@ final class DictationViewModel: ObservableObject {
     /// vigente, con `session` siempre en `.idle`. Única fuente de verdad para volver a un
     /// estado neutral (al iniciar la app, limpiar o cancelar una transcripción).
     private func steadyState() -> AppState {
-        let permission = microphonePermissionManager.currentStatus()
+        let permission = permissionStatusController.currentStatus
         guard modelManager.isModelInstalled else {
             return AppState(permission: permission, model: .missing, session: .idle, error: nil)
         }
         if permission == .restricted {
-            return AppState(permission: permission, model: .installed, session: .idle, error: Self.restrictedMicrophoneError)
+            return AppState(permission: permission, model: .installed, session: .idle, error: PermissionStatusController.restrictedMicrophoneError)
         }
         return AppState(permission: permission, model: .installed, session: .idle, error: nil)
     }
@@ -226,16 +216,8 @@ final class DictationViewModel: ObservableObject {
         return "Listo"
     }
 
-    /// Guarda la transcripción con un pequeño debounce para no escribir a disco en cada
-    /// tecla presionada en el editor.
     private func persistTranscript() {
-        pendingTranscriptSaveTask?.cancel()
-        let textToSave = transcript
-        pendingTranscriptSaveTask = Task { [weak self] in
-            try? await Task.sleep(for: .milliseconds(500))
-            guard !Task.isCancelled else { return }
-            self?.transcriptStore.saveTranscript(textToSave)
-        }
+        transcriptSessionController.scheduleSave(transcript)
     }
 
     var recordButtonTitle: String {
@@ -299,17 +281,18 @@ final class DictationViewModel: ObservableObject {
     /// alcanzado. Solo tiene sentido mientras se está grabando.
     var recordingWarningText: String? {
         guard state.session == .recording else { return nil }
-        if recordingElapsed >= Self.strongWarningThreshold {
+        switch RecordingDurationPolicy.warning(forElapsed: recordingElapsed) {
+        case .strong:
             return "Grabación muy larga: se recomienda detener y transcribir ahora."
-        }
-        if recordingElapsed >= Self.softWarningThreshold {
+        case .soft:
             return "Grabación larga: la transcripción puede tardar más."
+        case .none:
+            return nil
         }
-        return nil
     }
 
     var isStrongRecordingWarning: Bool {
-        state.session == .recording && recordingElapsed >= Self.strongWarningThreshold
+        state.session == .recording && RecordingDurationPolicy.warning(forElapsed: recordingElapsed) == .strong
     }
 
     /// Resuelve el `PrimaryState` para el área central de la ventana compacta (Fase 8). El
@@ -435,14 +418,14 @@ final class DictationViewModel: ObservableObject {
     }
 
     private func startRecordingFlow() async {
-        switch microphonePermissionManager.currentStatus() {
+        switch permissionStatusController.currentStatus {
         case .authorized:
             beginRecording()
 
         case .notDetermined:
             state.session = .requestingPermission
             statusText = "Solicitando permiso de micrófono..."
-            let granted = await microphonePermissionManager.requestAccess()
+            let granted = await permissionStatusController.requestAccess()
             if granted {
                 beginRecording()
             } else {
@@ -459,14 +442,13 @@ final class DictationViewModel: ObservableObject {
         case .restricted:
             state.permission = .restricted
             state.session = .idle
-            state.error = Self.restrictedMicrophoneError
+            state.error = PermissionStatusController.restrictedMicrophoneError
         }
     }
 
     /// Abre la sección de privacidad de Micrófono en Ajustes del Sistema.
     func openMicrophonePrivacySettings() {
-        guard let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone") else { return }
-        NSWorkspace.shared.open(url)
+        permissionStatusController.openMicrophonePrivacySettings()
     }
 
     /// Abre la sección de privacidad de Accesibilidad en Ajustes del Sistema (donde se habilita
@@ -474,8 +456,7 @@ final class DictationViewModel: ObservableObject {
     /// versión de macOS, `NSWorkspace` simplemente no abre nada; no hay fallback porque no vale
     /// la pena mantener dos textos de ayuda ligeramente distintos para ese caso borde.
     func openAccessibilityPrivacySettings() {
-        guard let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility") else { return }
-        NSWorkspace.shared.open(url)
+        permissionStatusController.openAccessibilityPrivacySettings()
     }
 
     /// Vuelve a consultar el estado del atajo global sin reiniciar el servicio. Se llama al
@@ -544,11 +525,11 @@ final class DictationViewModel: ObservableObject {
     }
 
     /// Cancela la transcripción en curso. `transcriptionTask?.cancel()` es solo una señal
-    /// cooperativa; comparar `currentTranscriptionAttempt` dentro de `transcribe(url:)` es lo
-    /// que realmente evita que un resultado que llega tarde sobrescriba el estado ya revertido.
+    /// cooperativa; `transcriptionAttemptCoordinator.cancel()` es lo que realmente evita que un
+    /// resultado que llega tarde sobrescriba el estado ya revertido.
     func cancelTranscription() {
         guard state.session == .transcribing else { return }
-        currentTranscriptionAttempt = nil
+        transcriptionAttemptCoordinator.cancel()
         transcriptionTask?.cancel()
         transcriptionTask = nil
         state = steadyState()
@@ -556,26 +537,17 @@ final class DictationViewModel: ObservableObject {
         lastTranscriptionOutcome = .cancelled
     }
 
-    /// Actualiza tiempo transcurrido y nivel de entrada cada 200ms mientras se graba. Vive en
-    /// un `Task` propio (en vez de `Timer`) para quedar en el mismo estilo async/await que el
-    /// resto del view model.
     private func startMetering() {
         recordingElapsed = 0
         inputLevel = 0
-        let start = Date()
-        meterTask?.cancel()
-        meterTask = Task {
-            while !Task.isCancelled {
-                recordingElapsed = Date().timeIntervalSince(start)
-                inputLevel = audioRecorder.currentLevel()
-                try? await Task.sleep(for: .milliseconds(200))
-            }
+        recordingMeter.start { [weak self] elapsed, level in
+            self?.recordingElapsed = elapsed
+            self?.inputLevel = level
         }
     }
 
     private func stopMetering() {
-        meterTask?.cancel()
-        meterTask = nil
+        recordingMeter.stop()
         inputLevel = 0
     }
 
@@ -598,13 +570,15 @@ final class DictationViewModel: ObservableObject {
     }
 
     private func transcribe(url: URL) async {
-        let attemptID = UUID()
-        currentTranscriptionAttempt = attemptID
         state.session = .transcribing
         statusText = "Transcribiendo..."
-        do {
-            let text = try await transcriptionService.transcribe(audioURL: url)
-            guard currentTranscriptionAttempt == attemptID else { return }
+        switch await transcriptionAttemptCoordinator.transcribe(url: url) {
+        case .cancelled:
+            // Llegó tarde: `cancelTranscription()` ya revirtió el estado y limpió
+            // `transcriptionTask`, así que no hay nada más que hacer con este resultado.
+            return
+
+        case .success(let text):
             // TODO(modo append, post-MVP2): hoy cada transcripción reemplaza la anterior;
             // en algún momento se podría agregar un modo que concatene en vez de sobrescribir.
             // Justo antes de perderla, se guarda como red de seguridad (Fase 2): ya no hay
@@ -622,9 +596,8 @@ final class DictationViewModel: ObservableObject {
             audioRecorder.deleteCurrentFile()
             lastRecordingURL = nil
             lastTranscriptionOutcome = .success
-        } catch {
-            guard currentTranscriptionAttempt == attemptID else { return }
-            let appError = AppError(category: .transcription, underlying: error)
+
+        case .failure(let appError):
             state.session = .idle
             state.error = appError
             statusText = appError.message
