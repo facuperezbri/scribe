@@ -70,9 +70,12 @@ protocol AutoPasteServicing {
 /// controlar ni se debe disparar de verdad desde un test unitario (el mismo motivo por el que
 /// `HotkeyTrigger`/`frontmostApplicationProvider` ya son inyectables en este archivo).
 ///
-/// No restaura el portapapeles anterior todavía (Fase 5) ni tiene una preferencia para
-/// deshabilitarse (Fase 6): esta clase solo intenta pegar, sin decidir si corresponde hacerlo más
-/// allá de sus propias validaciones (texto vacío, permiso, destino vivo, campo seguro).
+/// Restaura el contenido previo del portapapeles después de pegar (Fase 5), salvo que algo más
+/// lo haya escrito en el ínterin (típicamente, el usuario copiando algo nuevo mientras Scribe
+/// esperaba para restaurar) — en ese caso no toca nada, para no pisar esa copia más reciente. No
+/// tiene una preferencia para deshabilitarse todavía (Fase 6): esta clase solo intenta pegar, sin
+/// decidir si corresponde hacerlo más allá de sus propias validaciones (texto vacío, permiso,
+/// destino vivo, campo seguro).
 final class LiveAutoPasteService: AutoPasteServicing {
     /// Cuánto esperar tras reactivar el destino antes de sintetizar ⌘V. `NSRunningApplication.activate()`
     /// no es sincrónico: la activación real se completa en vueltas de run loop posteriores, así que
@@ -81,6 +84,11 @@ final class LiveAutoPasteService: AutoPasteServicing {
     /// Solo se aplica cuando el destino no es ya la app frontmost (caso común de background-first:
     /// el destino nunca perdió el foco durante la transcripción).
     private static let reactivationDelay: Duration = .milliseconds(120)
+    /// Cuánto esperar después de sintetizar ⌘V antes de restaurar el portapapeles anterior. Le da
+    /// tiempo al destino a leer el portapapeles (algunos toolkits lo hacen de forma asíncrona) antes
+    /// de que Scribe lo pise con el contenido previo. Misma naturaleza heurística que
+    /// `reactivationDelay` — ver checklist de QA manual.
+    private static let clipboardRestoreDelay: Duration = .milliseconds(200)
     /// `kVK_ANSI_V`, sin importar `Carbon.HIToolbox` solo por esta constante — mismo criterio que
     /// `HotkeyTrigger.fnSpace` (keyCode 49) en `GlobalHotkeyService.swift`.
     private static let pasteKeyCode: CGKeyCode = 9
@@ -89,7 +97,10 @@ final class LiveAutoPasteService: AutoPasteServicing {
     private let ownBundleIdentifier: String?
     private let isAccessibilityPermissionGranted: () -> Bool
     private let isFocusedElementSecure: () -> Bool
+    private let readPasteboardString: () -> String?
     private let writeToPasteboard: (String) -> Bool
+    private let pasteboardChangeCount: () -> Int
+    private let restorePasteboardString: (String?) -> Void
     private let activateTarget: (NSRunningApplication) -> Void
     private let postPasteKeystroke: () -> Bool
 
@@ -98,7 +109,10 @@ final class LiveAutoPasteService: AutoPasteServicing {
         ownBundleIdentifier: String? = Bundle.main.bundleIdentifier,
         isAccessibilityPermissionGranted: @escaping () -> Bool = { AXIsProcessTrusted() },
         isFocusedElementSecure: @escaping () -> Bool = LiveAutoPasteService.systemFocusedElementIsSecure,
+        readPasteboardString: @escaping () -> String? = LiveAutoPasteService.readGeneralPasteboardString,
         writeToPasteboard: @escaping (String) -> Bool = LiveAutoPasteService.writeStringToGeneralPasteboard,
+        pasteboardChangeCount: @escaping () -> Int = LiveAutoPasteService.generalPasteboardChangeCount,
+        restorePasteboardString: @escaping (String?) -> Void = LiveAutoPasteService.restoreGeneralPasteboardString,
         activateTarget: @escaping (NSRunningApplication) -> Void = { $0.activate() },
         postPasteKeystroke: @escaping () -> Bool = LiveAutoPasteService.postCommandVKeystroke
     ) {
@@ -106,7 +120,10 @@ final class LiveAutoPasteService: AutoPasteServicing {
         self.ownBundleIdentifier = ownBundleIdentifier
         self.isAccessibilityPermissionGranted = isAccessibilityPermissionGranted
         self.isFocusedElementSecure = isFocusedElementSecure
+        self.readPasteboardString = readPasteboardString
         self.writeToPasteboard = writeToPasteboard
+        self.pasteboardChangeCount = pasteboardChangeCount
+        self.restorePasteboardString = restorePasteboardString
         self.activateTarget = activateTarget
         self.postPasteKeystroke = postPasteKeystroke
     }
@@ -127,14 +144,35 @@ final class LiveAutoPasteService: AutoPasteServicing {
         guard isAccessibilityPermissionGranted() else { return .accessibilityPermissionMissing }
         guard !target.runningApplication.isTerminated else { return .targetUnavailable }
         guard !isFocusedElementSecure() else { return .secureField }
-        guard writeToPasteboard(text) else { return .pasteboardFailed }
+
+        let previousClipboardText = readPasteboardString()
+        guard writeToPasteboard(text) else {
+            // `writeToPasteboard` limpia el portapapeles antes de escribir (ver
+            // `writeStringToGeneralPasteboard`), así que incluso si falla puede haber pisado el
+            // contenido anterior — se restaura de una, sin esperar ni chequear `changeCount`: no
+            // hubo ningún punto async entre la lectura y este momento donde el usuario pudiera
+            // haber copiado algo nuevo.
+            restorePasteboardString(previousClipboardText)
+            return .pasteboardFailed
+        }
+        let changeCountAfterOurWrite = pasteboardChangeCount()
 
         if frontmostApplicationProvider()?.processIdentifier != target.processIdentifier {
             activateTarget(target.runningApplication)
             try? await Task.sleep(for: Self.reactivationDelay)
         }
 
-        return postPasteKeystroke() ? .pasted : .eventPostFailed
+        let result: AutoPasteResult = postPasteKeystroke() ? .pasted : .eventPostFailed
+
+        try? await Task.sleep(for: Self.clipboardRestoreDelay)
+        if pasteboardChangeCount() == changeCountAfterOurWrite {
+            restorePasteboardString(previousClipboardText)
+        }
+        // Si el `changeCount` cambió, algo más escribió en el portapapeles mientras Scribe
+        // esperaba (lo más probable: el usuario copió algo nuevo) — se deja esa copia más
+        // reciente en paz en vez de pisarla con el contenido de antes del auto-paste.
+
+        return result
     }
 
     /// Mejor esfuerzo, no garantizado: pregunta por el rol del elemento con foco vía la API de
@@ -156,10 +194,30 @@ final class LiveAutoPasteService: AutoPasteServicing {
         return subroleString == kAXSecureTextFieldSubrole as String
     }
 
+    private static func readGeneralPasteboardString() -> String? {
+        NSPasteboard.general.string(forType: .string)
+    }
+
     private static func writeStringToGeneralPasteboard(_ text: String) -> Bool {
         let pasteboard = NSPasteboard.general
         pasteboard.clearContents()
         return pasteboard.setString(text, forType: .string)
+    }
+
+    private static func generalPasteboardChangeCount() -> Int {
+        NSPasteboard.general.changeCount
+    }
+
+    /// Restaura `text` en el portapapeles general, o lo deja vacío si `text` es `nil` (no había
+    /// nada de texto plano antes del auto-paste). Contenido no textual que hubiera estado antes
+    /// (una imagen, un archivo) no se preserva — límite conocido, documentado igual que el de
+    /// detección de campos seguros más abajo.
+    private static func restoreGeneralPasteboardString(_ text: String?) {
+        let pasteboard = NSPasteboard.general
+        pasteboard.clearContents()
+        if let text {
+            _ = pasteboard.setString(text, forType: .string)
+        }
     }
 
     /// Sintetiza ⌘V con `CGEvent`, igual que lo haría un teclado real — mismo mecanismo que un

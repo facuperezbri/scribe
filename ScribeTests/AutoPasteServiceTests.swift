@@ -73,19 +73,28 @@ final class AutoPasteServiceTests: XCTestCase {
     /// Todos los efectos de sistema (portapapeles, reactivación, evento de teclado) están
     /// inyectados como espías locales: ninguna de estas pruebas toca el portapapeles real, activa
     /// una app real, ni sintetiza una tecla real. Clase (no struct) porque los closures inyectados
-    /// la capturan por referencia para registrar llamadas.
+    /// la capturan por referencia para registrar llamadas. `changeCount` imita el contador real de
+    /// `NSPasteboard`: la fake de `writeToPasteboard` lo incrementa al escribir, así que las
+    /// pruebas de restauración pueden simular una escritura externa (p. ej. el usuario copiando
+    /// algo nuevo) incrementándolo de nuevo entre la síntesis de ⌘V y el chequeo final.
     private final class PasteSpies {
         var pasteboardWriteCallCount = 0
         var activateCallCount = 0
         var keystrokeCallCount = 0
+        var readPasteboardCallCount = 0
+        var restoreCallCount = 0
+        var lastRestoredText: String?
+        var changeCount = 0
     }
 
     private func makeService(
         frontmostApplication: NSRunningApplication?,
         accessibilityGranted: Bool = true,
         secureField: Bool = false,
+        previousClipboardText: String? = "clipboard anterior",
         pasteboardWriteSucceeds: Bool = true,
         keystrokeSucceeds: Bool = true,
+        externalClipboardChangeAfterOurWrite: Bool = false,
         spies: PasteSpies
     ) -> LiveAutoPasteService {
         LiveAutoPasteService(
@@ -93,13 +102,24 @@ final class AutoPasteServiceTests: XCTestCase {
             ownBundleIdentifier: "com.example.not-scribe",
             isAccessibilityPermissionGranted: { accessibilityGranted },
             isFocusedElementSecure: { secureField },
+            readPasteboardString: {
+                spies.readPasteboardCallCount += 1
+                return previousClipboardText
+            },
             writeToPasteboard: { _ in
                 spies.pasteboardWriteCallCount += 1
+                if pasteboardWriteSucceeds { spies.changeCount += 1 }
                 return pasteboardWriteSucceeds
+            },
+            pasteboardChangeCount: { spies.changeCount },
+            restorePasteboardString: { text in
+                spies.restoreCallCount += 1
+                spies.lastRestoredText = text
             },
             activateTarget: { _ in spies.activateCallCount += 1 },
             postPasteKeystroke: {
                 spies.keystrokeCallCount += 1
+                if externalClipboardChangeAfterOurWrite { spies.changeCount += 1 }
                 return keystrokeSucceeds
             }
         )
@@ -115,6 +135,8 @@ final class AutoPasteServiceTests: XCTestCase {
         XCTAssertEqual(spies.pasteboardWriteCallCount, 0)
         XCTAssertEqual(spies.activateCallCount, 0)
         XCTAssertEqual(spies.keystrokeCallCount, 0)
+        XCTAssertEqual(spies.readPasteboardCallCount, 0)
+        XCTAssertEqual(spies.restoreCallCount, 0)
     }
 
     func testPasteReturnsAccessibilityPermissionMissingWithoutTouchingThePasteboard() async {
@@ -125,6 +147,8 @@ final class AutoPasteServiceTests: XCTestCase {
 
         XCTAssertEqual(result, .accessibilityPermissionMissing)
         XCTAssertEqual(spies.pasteboardWriteCallCount, 0)
+        XCTAssertEqual(spies.readPasteboardCallCount, 0)
+        XCTAssertEqual(spies.restoreCallCount, 0)
     }
 
     func testPasteReturnsSecureFieldWithoutTouchingThePasteboard() async {
@@ -135,26 +159,45 @@ final class AutoPasteServiceTests: XCTestCase {
 
         XCTAssertEqual(result, .secureField)
         XCTAssertEqual(spies.pasteboardWriteCallCount, 0)
+        XCTAssertEqual(spies.readPasteboardCallCount, 0)
+        XCTAssertEqual(spies.restoreCallCount, 0)
     }
 
-    func testPasteReturnsPasteboardFailedWithoutSendingAKeystroke() async {
+    /// Aun cuando la escritura falla, `writeStringToGeneralPasteboard` ya limpió el portapapeles
+    /// antes de intentar escribir — se restaura el contenido anterior igual, para no dejar el
+    /// portapapeles del usuario vacío por un intento fallido.
+    func testPasteReturnsPasteboardFailedWithoutSendingAKeystrokeButRestoresTheClipboard() async {
         let spies = PasteSpies()
-        let service = makeService(frontmostApplication: .current, pasteboardWriteSucceeds: false, spies: spies)
+        let service = makeService(
+            frontmostApplication: .current,
+            previousClipboardText: "clipboard anterior",
+            pasteboardWriteSucceeds: false,
+            spies: spies
+        )
 
         let result = await service.paste(text: "hola", target: .fake())
 
         XCTAssertEqual(result, .pasteboardFailed)
         XCTAssertEqual(spies.keystrokeCallCount, 0)
+        XCTAssertEqual(spies.restoreCallCount, 1)
+        XCTAssertEqual(spies.lastRestoredText, "clipboard anterior")
     }
 
-    func testPasteReturnsEventPostFailedWhenKeystrokeSynthesisFails() async {
+    func testPasteReturnsEventPostFailedWhenKeystrokeSynthesisFailsButStillRestoresTheClipboard() async {
         let spies = PasteSpies()
-        let service = makeService(frontmostApplication: .current, keystrokeSucceeds: false, spies: spies)
+        let service = makeService(
+            frontmostApplication: .current,
+            previousClipboardText: "clipboard anterior",
+            keystrokeSucceeds: false,
+            spies: spies
+        )
 
         let result = await service.paste(text: "hola", target: .fake())
 
         XCTAssertEqual(result, .eventPostFailed)
         XCTAssertEqual(spies.pasteboardWriteCallCount, 1)
+        XCTAssertEqual(spies.restoreCallCount, 1)
+        XCTAssertEqual(spies.lastRestoredText, "clipboard anterior")
     }
 
     /// Caso común de background-first: el destino nunca perdió el foco, así que no hace falta
@@ -169,6 +212,7 @@ final class AutoPasteServiceTests: XCTestCase {
         XCTAssertEqual(result, .pasted)
         XCTAssertEqual(spies.activateCallCount, 0)
         XCTAssertEqual(spies.keystrokeCallCount, 1)
+        XCTAssertEqual(spies.restoreCallCount, 1)
     }
 
     /// El usuario cambió de foco durante la transcripción: hay que reactivar el destino capturado
@@ -183,5 +227,61 @@ final class AutoPasteServiceTests: XCTestCase {
         XCTAssertEqual(result, .pasted)
         XCTAssertEqual(spies.activateCallCount, 1)
         XCTAssertEqual(spies.keystrokeCallCount, 1)
+        XCTAssertEqual(spies.restoreCallCount, 1)
+    }
+
+    // MARK: - LiveAutoPasteService.paste — restauración del portapapeles (Fase 5)
+
+    /// Camino feliz: después de pegar, el portapapeles vuelve a tener lo que tenía antes del
+    /// auto-paste, no el texto transcripto.
+    func testPasteRestoresThePreviousClipboardContentsAfterPasting() async {
+        let spies = PasteSpies()
+        let service = makeService(
+            frontmostApplication: .current,
+            previousClipboardText: "lo que el usuario había copiado antes",
+            spies: spies
+        )
+
+        let result = await service.paste(text: "hola mundo", target: .fake())
+
+        XCTAssertEqual(result, .pasted)
+        XCTAssertEqual(spies.readPasteboardCallCount, 1)
+        XCTAssertEqual(spies.restoreCallCount, 1)
+        XCTAssertEqual(spies.lastRestoredText, "lo que el usuario había copiado antes")
+    }
+
+    /// Si no había nada de texto plano en el portapapeles antes del auto-paste, "restaurar"
+    /// significa dejarlo vacío, no dejar la transcripción pegada ahí.
+    func testPasteRestoresAnEmptyClipboardWhenTherePreviouslyWasNothing() async {
+        let spies = PasteSpies()
+        let service = makeService(
+            frontmostApplication: .current,
+            previousClipboardText: nil,
+            spies: spies
+        )
+
+        let result = await service.paste(text: "hola mundo", target: .fake())
+
+        XCTAssertEqual(result, .pasted)
+        XCTAssertEqual(spies.restoreCallCount, 1)
+        XCTAssertNil(spies.lastRestoredText)
+    }
+
+    /// Si algo escribió en el portapapeles entre el auto-paste y la restauración (el caso
+    /// esperado: el usuario copió algo nuevo mientras esperaba), no se pisa esa copia más
+    /// reciente con el contenido de antes del auto-paste.
+    func testPasteDoesNotRestoreWhenTheClipboardChangedDuringTheRestoreWindow() async {
+        let spies = PasteSpies()
+        let service = makeService(
+            frontmostApplication: .current,
+            previousClipboardText: "clipboard anterior",
+            externalClipboardChangeAfterOurWrite: true,
+            spies: spies
+        )
+
+        let result = await service.paste(text: "hola mundo", target: .fake())
+
+        XCTAssertEqual(result, .pasted)
+        XCTAssertEqual(spies.restoreCallCount, 0)
     }
 }
