@@ -55,8 +55,31 @@ protocol GlobalHotkeyServicing {
     func currentStatus() -> HotkeyStatus
 }
 
-/// Implementación real de `GlobalHotkeyServicing`: detecta Fn + Espacio como atajo global de
-/// toggle. Ver `docs/DECISIONS.md` para la motivación de elegir Fn + Espacio sobre Option solo.
+/// Combinación de keyCode físico + modificador requerido que dispara el atajo, separada del
+/// mecanismo de detección (monitores de `NSEvent`, permiso de Accesibilidad) que vive en
+/// `LiveGlobalHotkeyService`. Existe como una vía de escape lista para usar si la validación en
+/// hardware real (ver checklist de QA en el README) confirma que Fn + Espacio no es fiable en
+/// algún modelo de teclado concreto: cambiar el atajo pasaría por instanciar
+/// `LiveGlobalHotkeyService` con otro `HotkeyTrigger`, sin tocar el monitor de eventos ni el
+/// modelo de permisos. No expone una preferencia de usuario ni una UI de configuración — eso
+/// sigue fuera de alcance (ver `docs/ROADMAP.md`); es solo un seam interno para un cambio de
+/// código puntual.
+struct HotkeyTrigger: Equatable {
+    /// keyCode físico independiente de layout de teclado (no es un carácter, así que no varía con
+    /// distribuciones como QWERTY en español vs. inglés).
+    let keyCode: UInt16
+    let requiredModifierFlags: NSEvent.ModifierFlags
+
+    static let fnSpace = HotkeyTrigger(keyCode: 49, requiredModifierFlags: .function)
+
+    func matches(_ event: NSEvent) -> Bool {
+        event.keyCode == keyCode && event.modifierFlags.contains(requiredModifierFlags)
+    }
+}
+
+/// Implementación real de `GlobalHotkeyServicing`: detecta Fn + Espacio (por defecto, vía
+/// `HotkeyTrigger.fnSpace`) como atajo global de toggle. Ver `docs/DECISIONS.md` para la
+/// motivación de elegir Fn + Espacio sobre Option solo.
 ///
 /// ## Enfoque elegido
 /// Fn + Espacio combina un modificador (Fn) con una tecla "no modificadora" real (Space, keyCode
@@ -112,15 +135,22 @@ protocol GlobalHotkeyServicing {
 /// - No verificado en hardware real durante esta migración (sin captura de pantalla ni automation
 ///   de UI disponible en este entorno): el comportamiento de Fn en distintos modelos de teclado
 ///   (Magic Keyboard vs. built-in, teclados de terceros sin tecla Fn dedicada) puede variar. Ver
-///   checklist de QA manual.
+///   checklist de QA manual. Si esa validación confirma un teclado donde Fn + Espacio no llega
+///   como se espera, `HotkeyTrigger` (arriba) es el punto de cambio: no hace falta tocar esta
+///   clase ni el modelo de permisos, solo instanciarla con otro `HotkeyTrigger`.
 /// - Igual que antes con Option: si se suelta un modificador extra mientras Fn + Space sigue
 ///   presionado, o viceversa, puede interpretarse como una presión nueva del atajo. Caso borde
 ///   aceptado.
 /// - Todavía no hay modo "mantener presionado" (hold-to-talk); ver el TODO en `handleKeyDown`.
 final class LiveGlobalHotkeyService: GlobalHotkeyServicing {
-    /// keyCode físico de la barra espaciadora, independiente de layout de teclado (no es un
-    /// carácter, así que no varía con distribuciones como QWERTY en español vs. inglés).
-    static let spaceKeyCode: UInt16 = 49
+    private let trigger: HotkeyTrigger
+
+    /// `trigger` por defecto es `.fnSpace`; un caller puede pasar otro `HotkeyTrigger` si la
+    /// validación en hardware real confirma que Fn + Espacio no es fiable en algún teclado
+    /// concreto (ver el comentario sobre `HotkeyTrigger` más arriba).
+    init(trigger: HotkeyTrigger = .fnSpace) {
+        self.trigger = trigger
+    }
 
     private var onHotkeyPressed: (@MainActor () -> Void)?
     /// Ve el atajo cuando otra app tiene el foco (Scribe no es la app activa). Requiere permiso
@@ -203,8 +233,7 @@ final class LiveGlobalHotkeyService: GlobalHotkeyServicing {
     /// toggle actual — probablemente distinguiendo el primer `keyDown` (ya disponible acá) de un
     /// `keyUp` posterior de Space.
     func handleKeyDown(_ event: NSEvent) {
-        guard event.keyCode == Self.spaceKeyCode,
-              event.modifierFlags.contains(.function),
+        guard trigger.matches(event),
               !event.isARepeat,
               let callback = onHotkeyPressed else { return }
         Task { @MainActor in

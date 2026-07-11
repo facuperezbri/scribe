@@ -28,7 +28,11 @@ El atajo original usaba Option solo, detectado vía `flagsChanged` (que solo inf
 
 Se descartó `RegisterEventHotKey` (Carbon) como alternativa a `NSEvent.addGlobalMonitorForEvents`: acepta esta combinación, pero introducir un segundo mecanismo de registro de atajos no se justificaba, y el modelo de permisos (Accesibilidad) es idéntico al que ya usaba el monitor de Option.
 
-**Limitación conocida:** la tecla Fn físicamente reasignada en algunos contextos (Fn+flecha → Home/End, etc.) es interceptada por el driver de teclado antes de llegar a las apps; Space no es una de esas teclas reasignadas, así que Fn + Espacio llega como `keyDown` normal. El comportamiento no fue verificado en variedad de hardware real (Magic Keyboard vs. built-in, teclados de terceros sin tecla Fn dedicada) — ver checklist de QA manual. Tampoco hay modo "mantener presionado" (hold-to-talk) como alternativa al toggle actual.
+**Limitación conocida:** la tecla Fn físicamente reasignada en algunos contextos (Fn+flecha → Home/End, etc.) es interceptada por el driver de teclado antes de llegar a las apps; Space no es una de esas teclas reasignadas, así que Fn + Espacio llega como `keyDown` normal. El comportamiento no fue verificado en variedad de hardware real (Magic Keyboard vs. built-in, teclados de terceros sin tecla Fn dedicada) — ver checklist de QA manual en el README. Tampoco hay modo "mantener presionado" (hold-to-talk) como alternativa al toggle actual.
+
+## `HotkeyTrigger`: el combo del atajo, separado de su detección
+
+`LiveGlobalHotkeyService.handleKeyDown` no compara `event.keyCode`/`event.modifierFlags` inline contra constantes hardcodeadas; delega en un `HotkeyTrigger` (keyCode + modificador requerido) inyectado por el caller, con `.fnSpace` como valor por defecto. Esto no es una preferencia de usuario ni abre una UI de configuración — el atajo sigue sin ser configurable (ver `docs/ROADMAP.md`) — es solo un seam interno: si la validación en hardware real (limitación conocida arriba) confirma que Fn + Espacio no es fiable en algún teclado concreto, cambiarlo pasa por instanciar `LiveGlobalHotkeyService(trigger:)` con otro `HotkeyTrigger`, sin tocar el monitor de eventos, el modelo de permisos de Accesibilidad, ni `DictationViewModel`.
 
 ## Monitor global + monitor local para el atajo
 

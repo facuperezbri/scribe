@@ -299,8 +299,6 @@ final class GlobalHotkeyServiceTests: XCTestCase {
         XCTAssertEqual(service.currentStatus(), .unknown)
     }
 
-    // MARK: - Detección real de Fn + Espacio (LiveGlobalHotkeyService.handleKeyDown)
-    //
     // Estos tests ejercitan la lógica real de detección con eventos sintéticos construidos vía
     // `NSEvent.keyEvent`, sin depender de un teclado real ni de un monitor global entregando
     // eventos del sistema. `handleKeyDown` dispara el callback con `Task { @MainActor in ... }`,
@@ -325,13 +323,54 @@ final class GlobalHotkeyServiceTests: XCTestCase {
         )!
     }
 
+    // MARK: - HotkeyTrigger (combo configurable, fallback si Fn + Espacio no fuera fiable)
+
+    func testFnSpaceTriggerMatchesFnPlusSpace() {
+        let event = makeKeyDownEvent(keyCode: HotkeyTrigger.fnSpace.keyCode, modifierFlags: .function)
+        XCTAssertTrue(HotkeyTrigger.fnSpace.matches(event))
+    }
+
+    func testFnSpaceTriggerDoesNotMatchADifferentKeyCode() {
+        let event = makeKeyDownEvent(keyCode: 0, modifierFlags: .function)
+        XCTAssertFalse(HotkeyTrigger.fnSpace.matches(event))
+    }
+
+    func testFnSpaceTriggerDoesNotMatchADifferentModifier() {
+        let event = makeKeyDownEvent(keyCode: HotkeyTrigger.fnSpace.keyCode, modifierFlags: .option)
+        XCTAssertFalse(HotkeyTrigger.fnSpace.matches(event))
+    }
+
+    /// `LiveGlobalHotkeyService` no tiene el combo de Fn + Espacio hardcodeado en su lógica de
+    /// detección: instanciarlo con otro `HotkeyTrigger` (por ejemplo, un fallback para un teclado
+    /// donde la validación de QA confirme que Fn + Espacio no es fiable) alcanza para cambiar qué
+    /// evento dispara el atajo, sin tocar `handleKeyDown` ni el modelo de permisos.
+    func testCustomTriggerIsHonoredInsteadOfTheDefault() async {
+        let fallback = HotkeyTrigger(keyCode: 96, requiredModifierFlags: .control)
+        let service = LiveGlobalHotkeyService(trigger: fallback)
+        var pressCount = 0
+        try? service.start { pressCount += 1 }
+
+        // El combo por defecto (Fn + Espacio) ya no dispara nada con este trigger inyectado.
+        service.handleKeyDown(
+            makeKeyDownEvent(keyCode: HotkeyTrigger.fnSpace.keyCode, modifierFlags: .function)
+        )
+        try? await Task.sleep(for: .milliseconds(50))
+        XCTAssertEqual(pressCount, 0)
+
+        service.handleKeyDown(makeKeyDownEvent(keyCode: 96, modifierFlags: .control))
+        try? await Task.sleep(for: .milliseconds(50))
+        XCTAssertEqual(pressCount, 1)
+    }
+
+    // MARK: - Detección real de Fn + Espacio (LiveGlobalHotkeyService.handleKeyDown)
+
     func testHandleKeyDownFiresOnFnSpace() async {
         let service = LiveGlobalHotkeyService()
         var pressCount = 0
         try? service.start { pressCount += 1 }
 
         service.handleKeyDown(
-            makeKeyDownEvent(keyCode: LiveGlobalHotkeyService.spaceKeyCode, modifierFlags: .function)
+            makeKeyDownEvent(keyCode: HotkeyTrigger.fnSpace.keyCode, modifierFlags: .function)
         )
         try? await Task.sleep(for: .milliseconds(50))
 
@@ -345,7 +384,7 @@ final class GlobalHotkeyServiceTests: XCTestCase {
         var pressed = false
         try? service.start { pressed = true }
 
-        service.handleKeyDown(makeKeyDownEvent(keyCode: LiveGlobalHotkeyService.spaceKeyCode, modifierFlags: []))
+        service.handleKeyDown(makeKeyDownEvent(keyCode: HotkeyTrigger.fnSpace.keyCode, modifierFlags: []))
         try? await Task.sleep(for: .milliseconds(50))
 
         XCTAssertFalse(pressed)
@@ -371,7 +410,7 @@ final class GlobalHotkeyServiceTests: XCTestCase {
         var pressed = false
         try? service.start { pressed = true }
 
-        service.handleKeyDown(makeKeyDownEvent(keyCode: LiveGlobalHotkeyService.spaceKeyCode, modifierFlags: .option))
+        service.handleKeyDown(makeKeyDownEvent(keyCode: HotkeyTrigger.fnSpace.keyCode, modifierFlags: .option))
         try? await Task.sleep(for: .milliseconds(50))
 
         XCTAssertFalse(pressed)
@@ -385,13 +424,13 @@ final class GlobalHotkeyServiceTests: XCTestCase {
         try? service.start { pressCount += 1 }
 
         service.handleKeyDown(
-            makeKeyDownEvent(keyCode: LiveGlobalHotkeyService.spaceKeyCode, modifierFlags: .function, isARepeat: false)
+            makeKeyDownEvent(keyCode: HotkeyTrigger.fnSpace.keyCode, modifierFlags: .function, isARepeat: false)
         )
         service.handleKeyDown(
-            makeKeyDownEvent(keyCode: LiveGlobalHotkeyService.spaceKeyCode, modifierFlags: .function, isARepeat: true)
+            makeKeyDownEvent(keyCode: HotkeyTrigger.fnSpace.keyCode, modifierFlags: .function, isARepeat: true)
         )
         service.handleKeyDown(
-            makeKeyDownEvent(keyCode: LiveGlobalHotkeyService.spaceKeyCode, modifierFlags: .function, isARepeat: true)
+            makeKeyDownEvent(keyCode: HotkeyTrigger.fnSpace.keyCode, modifierFlags: .function, isARepeat: true)
         )
         try? await Task.sleep(for: .milliseconds(50))
 
@@ -408,7 +447,7 @@ final class GlobalHotkeyServiceTests: XCTestCase {
         try? service.start { pressCount += 1 }
 
         _ = service.handleLocalKeyDown(
-            makeKeyDownEvent(keyCode: LiveGlobalHotkeyService.spaceKeyCode, modifierFlags: .function)
+            makeKeyDownEvent(keyCode: HotkeyTrigger.fnSpace.keyCode, modifierFlags: .function)
         )
         try? await Task.sleep(for: .milliseconds(50))
 
@@ -420,7 +459,7 @@ final class GlobalHotkeyServiceTests: XCTestCase {
     func testHandleLocalKeyDownReturnsEventUnchanged() {
         let service = LiveGlobalHotkeyService()
         try? service.start {}
-        let event = makeKeyDownEvent(keyCode: LiveGlobalHotkeyService.spaceKeyCode, modifierFlags: [])
+        let event = makeKeyDownEvent(keyCode: HotkeyTrigger.fnSpace.keyCode, modifierFlags: [])
 
         let returned = service.handleLocalKeyDown(event)
 
@@ -433,7 +472,7 @@ final class GlobalHotkeyServiceTests: XCTestCase {
         var pressed = false
         try? service.start { pressed = true }
 
-        _ = service.handleLocalKeyDown(makeKeyDownEvent(keyCode: LiveGlobalHotkeyService.spaceKeyCode, modifierFlags: []))
+        _ = service.handleLocalKeyDown(makeKeyDownEvent(keyCode: HotkeyTrigger.fnSpace.keyCode, modifierFlags: []))
         try? await Task.sleep(for: .milliseconds(50))
 
         XCTAssertFalse(pressed)
@@ -451,7 +490,7 @@ final class GlobalHotkeyServiceTests: XCTestCase {
 
         service.stop()
         service.handleKeyDown(
-            makeKeyDownEvent(keyCode: LiveGlobalHotkeyService.spaceKeyCode, modifierFlags: .function)
+            makeKeyDownEvent(keyCode: HotkeyTrigger.fnSpace.keyCode, modifierFlags: .function)
         )
         try? await Task.sleep(for: .milliseconds(50))
 

@@ -12,7 +12,12 @@ tested controllers (`PermissionStatusController`, `TranscriptSessionController`,
 code comments in favor of `DECISIONS.md`; split this README into product docs +
 `CHANGELOG.md`/`ROADMAP.md`/`DECISIONS.md`; added a GitHub Actions CI workflow
 (`.github/workflows/ci.yml`) that runs `xcodegen generate` → resolve package dependencies → build →
-test, unsigned, on every push/PR to `main`.
+test, unsigned, on every push/PR to `main`; extracted `HotkeyTrigger` out of
+`LiveGlobalHotkeyService` so the Fn + Espacio combo is an injectable value instead of hardcoded
+inline, as a low-risk fallback seam for hardware where it turns out not to be reliable (see
+`docs/DECISIONS.md`), and expanded the README's manual QA checklist with a dedicated Fn + Espacio
+hardware-validation list (built-in keyboard, Magic Keyboard with/without a dedicated Fn key,
+third-party keyboards, Karabiner-remapped keyboards).
 
 ## MVP4 — background-first dictation, menu bar item, and floating overlay
 

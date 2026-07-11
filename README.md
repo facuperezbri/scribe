@@ -367,9 +367,32 @@ consolidates the checks called out throughout this document:
   recording should start with the floating overlay appearing near the top
   of the screen, and the other app should keep its focus/key window the
   whole time — Scribe's window must NOT come to the front or steal focus.
-  Press again to stop and transcribe. Try it on more than one keyboard model
-  if possible (built-in vs. Magic Keyboard vs. third-party), since Fn-key
-  behavior can vary.
+  Press again to stop and transcribe.
+- **Fn + Espacio hardware validation** — the exact combo hasn't been
+  confirmed across every keyboard model (see
+  [docs/DECISIONS.md](docs/DECISIONS.md) for why: Fn-reassigned keys like
+  arrows are intercepted before reaching any app, and that's only confirmed
+  to be a non-issue for Space in theory, not tested on hardware). Repeat the
+  check above on as many of these as you have access to, and note which ones
+  were actually tried:
+  - Built-in laptop keyboard (the most common case, and the most likely to
+    already work correctly).
+  - Apple Magic Keyboard (with and without a dedicated Fn key — older/small
+    Magic Keyboards don't have one).
+  - A third-party keyboard with no dedicated Fn key at all.
+  - A keyboard remapped through a tool like Karabiner-Elements, since
+    remapping can change what keyCode/modifier combination actually reaches
+    Scribe.
+  - If any of these fails: don't try to fix it by touching
+    `LiveGlobalHotkeyService`'s event-matching logic directly — the combo it
+    checks for is a single `HotkeyTrigger` value (`.fnSpace` by default; see
+    [docs/DECISIONS.md](docs/DECISIONS.md)) injected at construction, so a
+    confirmed hardware-specific fallback can be swapped in by passing a
+    different `HotkeyTrigger` to `LiveGlobalHotkeyService(trigger:)`,
+    without touching the monitor or permission code around it. This is a
+    code-level escape hatch, not a user-facing setting — a configurable
+    shortcut is still out of scope (see
+    [docs/ROADMAP.md](docs/ROADMAP.md)).
 - **Fn + Espacio while Scribe itself is focused** — with Scribe's own window
   open and focused, confirm the shortcut still starts/stops recording (this
   is the local-monitor path, distinct from the global-monitor path used when
