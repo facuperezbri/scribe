@@ -57,6 +57,26 @@ final class DictationViewModelDependencyInjectionTests: XCTestCase {
         XCTAssertEqual(clipboardService.copiedText, "hola mundo")
     }
 
+    /// `autoPasteService` no se llama todavía desde ningún flujo (eso llega en una fase
+    /// posterior): esta prueba solo confirma que la inyección compila y no rompe el arranque.
+    func testViewModelCanBeConstructedWithAFakeAutoPasteService() {
+        let autoPasteService = FakeAutoPasteService()
+
+        let viewModel = DictationViewModel(
+            audioRecorder: FakeAudioRecordingService(),
+            modelManager: FakeModelManager(),
+            microphonePermissionManager: FakeMicrophonePermissionManager(),
+            clipboardService: FakeClipboardService(),
+            transcriptStore: FakeTranscriptStore(),
+            autoPasteService: autoPasteService,
+            transcriptionService: FakeTranscriptionService()
+        )
+
+        XCTAssertEqual(viewModel.state.session, .idle)
+        XCTAssertEqual(autoPasteService.captureTargetCallCount, 0)
+        XCTAssertEqual(autoPasteService.pasteCallCount, 0)
+    }
+
     func testTranscriptRestoredFromInjectedTranscriptStore() {
         let transcriptStore = FakeTranscriptStore()
         transcriptStore.storedTranscript = "transcripción previa"

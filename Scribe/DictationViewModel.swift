@@ -132,6 +132,7 @@ final class DictationViewModel: ObservableObject {
     private let clipboardService: ClipboardServicing
     private let globalHotkeyService: GlobalHotkeyServicing
     private let windowActivationService: WindowActivationServicing
+    private let autoPasteService: AutoPasteServicing
     private let permissionStatusController: PermissionStatusController
     private let transcriptSessionController: TranscriptSessionController
     private let recordingMeter: RecordingMeter
@@ -147,6 +148,7 @@ final class DictationViewModel: ObservableObject {
         transcriptStore: TranscriptStoring = FileTranscriptStore(),
         globalHotkeyService: GlobalHotkeyServicing = LiveGlobalHotkeyService(),
         windowActivationService: WindowActivationServicing = LiveWindowActivationService(),
+        autoPasteService: AutoPasteServicing = LiveAutoPasteService(),
         transcriptionService: TranscriptionServicing? = nil,
         userDefaults: UserDefaults = .standard
     ) {
@@ -155,6 +157,7 @@ final class DictationViewModel: ObservableObject {
         self.clipboardService = clipboardService
         self.globalHotkeyService = globalHotkeyService
         self.windowActivationService = windowActivationService
+        self.autoPasteService = autoPasteService
         self.transcriptionService = transcriptionService ?? TranscriptionService(modelManager: modelManager)
         self.permissionStatusController = PermissionStatusController(microphonePermissionManager: microphonePermissionManager)
         self.transcriptSessionController = TranscriptSessionController(transcriptStore: transcriptStore)

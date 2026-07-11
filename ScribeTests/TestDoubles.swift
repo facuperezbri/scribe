@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 @testable import Scribe
 
@@ -153,5 +154,44 @@ final class FakeWindowActivationService: WindowActivationServicing {
 
     func registerReopenHandler(_ handler: @escaping () -> Void) {
         reopenHandler = handler
+    }
+}
+
+final class FakeAutoPasteService: AutoPasteServicing {
+    var targetToCapture: AutoPasteTarget?
+    var pasteResult: AutoPasteResult = .pasted
+    private(set) var captureTargetCallCount = 0
+    private(set) var pasteCallCount = 0
+    private(set) var lastPastedText: String?
+    private(set) var lastPasteTarget: AutoPasteTarget?
+
+    func captureTarget() -> AutoPasteTarget? {
+        captureTargetCallCount += 1
+        return targetToCapture
+    }
+
+    func paste(text: String, target: AutoPasteTarget) async -> AutoPasteResult {
+        pasteCallCount += 1
+        lastPastedText = text
+        lastPasteTarget = target
+        return pasteResult
+    }
+}
+
+/// `AutoPasteTarget` envuelve un `NSRunningApplication` vivo, que no tiene inicializador público:
+/// los tests usan `.current` (el propio proceso de test) como relleno, ya que solo los campos
+/// planos (`bundleIdentifier`/`localizedName`/`processIdentifier`) importan para las aserciones.
+extension AutoPasteTarget {
+    static func fake(
+        processIdentifier: pid_t = 12345,
+        bundleIdentifier: String? = "com.example.target",
+        localizedName: String? = "Target de prueba"
+    ) -> AutoPasteTarget {
+        AutoPasteTarget(
+            processIdentifier: processIdentifier,
+            bundleIdentifier: bundleIdentifier,
+            localizedName: localizedName,
+            runningApplication: .current
+        )
     }
 }
