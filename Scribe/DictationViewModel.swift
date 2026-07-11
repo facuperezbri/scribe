@@ -64,9 +64,11 @@ enum StatusKind: Equatable {
     case error
 }
 
-/// Acción destructiva que espera confirmación explícita del usuario antes de ejecutarse.
+/// Acción destructiva que espera confirmación explícita del usuario antes de ejecutarse. Grabar
+/// de nuevo sobre una transcripción existente ya no pasa por acá (Fase 2 del rediseño estilo
+/// Wispr): en vez de bloquear con un diálogo, `DictationViewModel` guarda esa transcripción en
+/// `previousTranscript` y arranca a grabar directo, así que solo queda `.clearTranscript`.
 enum PendingConfirmation: Equatable {
-    case replaceTranscript
     case clearTranscript
 }
 
@@ -109,6 +111,11 @@ final class DictationViewModel: ObservableObject {
     }
     @Published var showCopiedFeedback = false
     @Published var pendingConfirmation: PendingConfirmation?
+    /// Transcripción que existía justo antes de que una nueva grabación la reemplazara (Fase 2
+    /// del rediseño estilo Wispr), para poder recuperarla con `restorePreviousTranscript()`. Es
+    /// un único búfer en memoria, no un historial: se pisa con cada reemplazo nuevo y se vacía al
+    /// usarse, para dar una red de seguridad liviana sin construir un producto de historial.
+    @Published private(set) var previousTranscript: String?
     @Published var recordingElapsed: TimeInterval = 0
     @Published var inputLevel: Float = 0
     @Published var hotkeyStatus: HotkeyStatus = .unknown
@@ -394,22 +401,19 @@ final class DictationViewModel: ObservableObject {
         case .recording:
             stopRecording()
         case .idle:
-            if !transcript.isEmpty {
-                pendingConfirmation = .replaceTranscript
-            } else {
-                startRecordingIfPossible()
-            }
+            // Grabar de nuevo con una transcripción existente ya no pide confirmación (Fase 2 del
+            // rediseño estilo Wispr): arranca directo y la transcripción reemplazada queda en
+            // `previousTranscript` (ver `transcribe(url:)`), recuperable con
+            // `restorePreviousTranscript()`.
+            startRecordingIfPossible()
         default:
             break
         }
     }
 
-    /// Confirma o cancela la acción destructiva pendiente (reemplazar o limpiar transcripción).
+    /// Confirma o cancela la acción destructiva pendiente (hoy, solo limpiar transcripción).
     func confirmPendingAction() {
         switch pendingConfirmation {
-        case .replaceTranscript:
-            pendingConfirmation = nil
-            startRecordingIfPossible()
         case .clearTranscript:
             pendingConfirmation = nil
             performClear()
@@ -603,6 +607,12 @@ final class DictationViewModel: ObservableObject {
             guard currentTranscriptionAttempt == attemptID else { return }
             // TODO(modo append, post-MVP2): hoy cada transcripción reemplaza la anterior;
             // en algún momento se podría agregar un modo que concatene en vez de sobrescribir.
+            // Justo antes de perderla, se guarda como red de seguridad (Fase 2): ya no hay
+            // confirmación bloqueante antes de este punto, así que esta es la única chance de
+            // recuperar el texto anterior.
+            if !transcript.isEmpty {
+                previousTranscript = transcript
+            }
             transcript = text
             state.session = .idle
             state.error = nil
@@ -680,10 +690,22 @@ final class DictationViewModel: ObservableObject {
         pendingConfirmation = .clearTranscript
     }
 
+    /// Recupera la transcripción guardada en `previousTranscript` (la que había justo antes del
+    /// último reemplazo) y vacía el búfer: es una recuperación de un solo uso, no un historial.
+    func restorePreviousTranscript() {
+        guard let previousTranscript else { return }
+        transcript = previousTranscript
+        self.previousTranscript = nil
+    }
+
     /// Vacía la transcripción y recalcula el estado real (no asume `.idle` sin más): si falta
-    /// el modelo o el micrófono está bloqueado, el estado debe seguir reflejando eso.
+    /// el modelo o el micrófono está bloqueado, el estado debe seguir reflejando eso. También
+    /// vacía `previousTranscript`: limpiar ya tiene su propia confirmación explícita, así que no
+    /// hace falta que la red de seguridad de "reemplazo" siga ofreciendo un texto de un reemplazo
+    /// previo después de un borrado intencional y ya confirmado.
     private func performClear() {
         transcript = ""
+        previousTranscript = nil
         state = steadyState()
         statusText = statusText(for: state)
     }

@@ -9,7 +9,11 @@ struct TranscriptEditorView: View {
     }
 
     var body: some View {
-        VStack(alignment: .trailing, spacing: 4) {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("Transcripción")
+                .font(.caption.weight(.medium))
+                .foregroundStyle(.secondary)
+
             // El placeholder y el TextEditor comparten el mismo `.padding(10)`: al aplicarse
             // sobre un Group, SwiftUI lo reparte igual a cada hijo, así quedan alineados
             // sin duplicar el número en dos lugares distintos. El placeholder suma un leading
@@ -31,17 +35,18 @@ struct TranscriptEditorView: View {
                 }
                 .padding(10)
             }
-            .frame(minHeight: 140)
+            .frame(maxWidth: .infinity, minHeight: 140)
             .background(Color(nsColor: .textBackgroundColor))
-            .clipShape(RoundedRectangle(cornerRadius: 10))
+            .clipShape(RoundedRectangle(cornerRadius: Metrics.controlCornerRadius))
             .overlay(
-                RoundedRectangle(cornerRadius: 10)
+                RoundedRectangle(cornerRadius: Metrics.controlCornerRadius)
                     .stroke(Color.gray.opacity(0.25), lineWidth: 1)
             )
 
             Text("\(wordCount) palabras · \(text.count) caracteres")
                 .font(.caption2)
                 .foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity, alignment: .trailing)
         }
     }
 }

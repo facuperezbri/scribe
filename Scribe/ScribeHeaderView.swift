@@ -1,21 +1,20 @@
 import SwiftUI
 
-/// Encabezado fijo de la ventana compacta: nombre de la app y una única línea de marca,
-/// sin estado dinámico (el estado en vivo vive en `DictationStatusView`, no acá).
+/// Encabezado fijo de la ventana compacta: una única línea chica de marca, sin estado dinámico
+/// (el estado en vivo vive en `DictationStatusView`, no acá). A partir de la Fase 3 del rediseño
+/// estilo Wispr se redujo a tamaño de nota al pie: el nombre de la app no necesita competir en
+/// tamaño con el título de estado central, que es la única cosa que debería saltar a la vista.
 struct ScribeHeaderView: View {
     var body: some View {
-        VStack(spacing: 2) {
-            HStack(spacing: 6) {
-                Image(systemName: "waveform")
-                    .foregroundStyle(Color.accentColor)
-                Text("Scribe")
-                    .font(.title3)
-                    .fontWeight(.bold)
-            }
-            Text("Dictado local")
-                .font(.caption2)
+        HStack(spacing: 5) {
+            Image(systemName: "waveform")
+                .foregroundStyle(Color.accentColor)
+            Text("Scribe")
+                .fontWeight(.semibold)
+            Text("· Dictado local")
                 .foregroundStyle(.secondary)
         }
+        .font(.footnote)
     }
 }
 

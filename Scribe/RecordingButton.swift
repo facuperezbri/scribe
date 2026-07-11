@@ -15,7 +15,7 @@ struct RecordingButton: View {
             }
             .font(.title3.weight(.semibold))
             .frame(maxWidth: .infinity)
-            .padding(.vertical, 12)
+            .padding(.vertical, 14)
         }
         .buttonStyle(.borderedProminent)
         .tint(isRecording ? .red : .accentColor)

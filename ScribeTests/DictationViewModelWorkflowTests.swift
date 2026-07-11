@@ -49,36 +49,84 @@ final class DictationViewModelWorkflowTests: XCTestCase {
         XCTAssertEqual(viewModel.state.session, .transcribing)
     }
 
-    func testNewRecordingWithNonEmptyTranscriptRequiresConfirmation() async {
+    func testNewRecordingWithNonEmptyTranscriptStartsImmediatelyWithoutConfirmation() async {
         let audioRecorder = FakeAudioRecordingService()
         let viewModel = makeViewModel(audioRecorder: audioRecorder)
         viewModel.transcript = "transcripción anterior"
 
         viewModel.handlePrimaryDictationAction()
-
-        XCTAssertEqual(viewModel.pendingConfirmation, .replaceTranscript)
-        XCTAssertEqual(audioRecorder.startRecordingCallCount, 0)
-
-        viewModel.confirmPendingAction()
         try? await Task.sleep(for: .milliseconds(50))
 
         XCTAssertNil(viewModel.pendingConfirmation)
         XCTAssertEqual(audioRecorder.startRecordingCallCount, 1)
         XCTAssertEqual(viewModel.state.session, .recording)
+        XCTAssertEqual(viewModel.transcript, "transcripción anterior")
     }
 
-    func testCancellingReplaceConfirmationLeavesTranscriptAndStateUnchanged() {
+    func testReplacingATranscriptSavesThePreviousOneForUndo() async {
         let audioRecorder = FakeAudioRecordingService()
-        let viewModel = makeViewModel(audioRecorder: audioRecorder)
+        let transcriptionService = FakeTranscriptionService()
+        transcriptionService.transcribeResult = .success("transcripción nueva")
+        let viewModel = makeViewModel(audioRecorder: audioRecorder, transcriptionService: transcriptionService)
         viewModel.transcript = "transcripción anterior"
 
         viewModel.handlePrimaryDictationAction()
-        viewModel.cancelPendingConfirmation()
+        try? await Task.sleep(for: .milliseconds(50))
+        XCTAssertNil(viewModel.previousTranscript, "todavía no se perdió nada mientras se graba")
 
-        XCTAssertNil(viewModel.pendingConfirmation)
-        XCTAssertEqual(audioRecorder.startRecordingCallCount, 0)
+        viewModel.handlePrimaryDictationAction()
+        try? await Task.sleep(for: .milliseconds(50))
+
+        XCTAssertEqual(viewModel.transcript, "transcripción nueva")
+        XCTAssertEqual(viewModel.previousTranscript, "transcripción anterior")
+    }
+
+    func testRestorePreviousTranscriptSwapsBackAndClearsTheBuffer() async {
+        let audioRecorder = FakeAudioRecordingService()
+        let transcriptionService = FakeTranscriptionService()
+        transcriptionService.transcribeResult = .success("transcripción nueva")
+        let viewModel = makeViewModel(audioRecorder: audioRecorder, transcriptionService: transcriptionService)
+        viewModel.transcript = "transcripción anterior"
+
+        viewModel.handlePrimaryDictationAction()
+        try? await Task.sleep(for: .milliseconds(50))
+        viewModel.handlePrimaryDictationAction()
+        try? await Task.sleep(for: .milliseconds(50))
+
+        viewModel.restorePreviousTranscript()
+
         XCTAssertEqual(viewModel.transcript, "transcripción anterior")
-        XCTAssertEqual(viewModel.state.session, .idle)
+        XCTAssertNil(viewModel.previousTranscript)
+    }
+
+    func testRestorePreviousTranscriptDoesNothingWithoutABuffer() {
+        let viewModel = makeViewModel()
+        viewModel.transcript = "algo"
+
+        viewModel.restorePreviousTranscript()
+
+        XCTAssertEqual(viewModel.transcript, "algo")
+        XCTAssertNil(viewModel.previousTranscript)
+    }
+
+    func testClearingATranscriptAlsoClearsTheUndoBuffer() async {
+        let audioRecorder = FakeAudioRecordingService()
+        let transcriptionService = FakeTranscriptionService()
+        transcriptionService.transcribeResult = .success("transcripción nueva")
+        let viewModel = makeViewModel(audioRecorder: audioRecorder, transcriptionService: transcriptionService)
+        viewModel.transcript = "transcripción anterior"
+
+        viewModel.handlePrimaryDictationAction()
+        try? await Task.sleep(for: .milliseconds(50))
+        viewModel.handlePrimaryDictationAction()
+        try? await Task.sleep(for: .milliseconds(50))
+        XCTAssertEqual(viewModel.previousTranscript, "transcripción anterior")
+
+        viewModel.clearTranscript()
+        viewModel.confirmPendingAction()
+
+        XCTAssertEqual(viewModel.transcript, "")
+        XCTAssertNil(viewModel.previousTranscript)
     }
 
     func testClearingNonEmptyTranscriptRequiresConfirmation() {

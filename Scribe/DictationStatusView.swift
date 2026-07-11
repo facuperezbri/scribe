@@ -49,20 +49,26 @@ struct DictationStatusView: View {
     }
 
     var body: some View {
-        VStack(spacing: 10) {
-            Image(systemName: icon)
-                .font(.system(size: 32, weight: .medium))
-                .foregroundStyle(iconColor)
-                .scaleEffect(isPulsing ? 1.12 : 1.0)
-                .animation(
-                    isRecording ? .easeInOut(duration: 0.9).repeatForever(autoreverses: true) : .default,
-                    value: isPulsing
-                )
-                .onAppear { isPulsing = isRecording }
-                .onChange(of: isRecording) { isPulsing = $0 }
+        VStack(spacing: 12) {
+            ZStack {
+                Circle()
+                    .fill(iconColor.opacity(0.12))
+                    .frame(width: 64, height: 64)
+
+                Image(systemName: icon)
+                    .font(.system(size: 28, weight: .medium))
+                    .foregroundStyle(iconColor)
+            }
+            .scaleEffect(isPulsing ? 1.12 : 1.0)
+            .animation(
+                isRecording ? .easeInOut(duration: 0.9).repeatForever(autoreverses: true) : .default,
+                value: isPulsing
+            )
+            .onAppear { isPulsing = isRecording }
+            .onChange(of: isRecording) { isPulsing = $0 }
 
             Text(title)
-                .font(.title3.weight(.semibold))
+                .font(.title2.weight(.bold))
                 .multilineTextAlignment(.center)
 
             if let hint {
