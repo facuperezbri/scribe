@@ -1,4 +1,6 @@
 import AppKit
+import ApplicationServices
+import CoreGraphics
 import Foundation
 
 /// App capturada como destino de un auto-paste (la que tenía el foco antes de que arrancara el
@@ -57,25 +59,56 @@ protocol AutoPasteServicing {
 
 /// Implementación real de `AutoPasteServicing`.
 ///
-/// `captureTarget()` ya funciona: lee la app frontmost vía `frontmostApplicationProvider` (por
-/// defecto, `NSWorkspace.shared.frontmostApplication`) y descarta a Scribe misma comparando contra
-/// `ownBundleIdentifier`. Ambos son parámetros inyectables — no por flexibilidad especulativa, sino
-/// porque `NSWorkspace.shared` no se puede controlar desde un test unitario, el mismo motivo por el
-/// que `HotkeyTrigger` es inyectable en `LiveGlobalHotkeyService`.
+/// `captureTarget()` lee la app frontmost vía `frontmostApplicationProvider` (por defecto,
+/// `NSWorkspace.shared.frontmostApplication`) y descarta a Scribe misma comparando contra
+/// `ownBundleIdentifier`.
 ///
-/// `paste(text:target:)` todavía no pega nada de verdad: el reemplazo de portapapeles + reactivar
-/// destino + sintetizar ⌘V es Fase 4. Por ahora devuelve `.unknown` siempre, así que llamarlo no
-/// tiene efecto observable.
+/// `paste(text:target:)` escribe el texto en el portapapeles, reactiva el destino solo si ya no es
+/// la app frontmost, y sintetiza ⌘V con `CGEvent`. Todos los efectos de sistema (permiso de
+/// Accesibilidad, campo seguro, portapapeles, reactivación, evento de teclado) están detrás de
+/// parámetros inyectables — no por flexibilidad especulativa, sino porque ninguno de ellos se puede
+/// controlar ni se debe disparar de verdad desde un test unitario (el mismo motivo por el que
+/// `HotkeyTrigger`/`frontmostApplicationProvider` ya son inyectables en este archivo).
+///
+/// No restaura el portapapeles anterior todavía (Fase 5) ni tiene una preferencia para
+/// deshabilitarse (Fase 6): esta clase solo intenta pegar, sin decidir si corresponde hacerlo más
+/// allá de sus propias validaciones (texto vacío, permiso, destino vivo, campo seguro).
 final class LiveAutoPasteService: AutoPasteServicing {
+    /// Cuánto esperar tras reactivar el destino antes de sintetizar ⌘V. `NSRunningApplication.activate()`
+    /// no es sincrónico: la activación real se completa en vueltas de run loop posteriores, así que
+    /// sin este margen el evento de teclado puede llegar antes de que el destino sea la app activa.
+    /// Heurística fija, no medida en variedad de hardware/apps real — ver checklist de QA manual.
+    /// Solo se aplica cuando el destino no es ya la app frontmost (caso común de background-first:
+    /// el destino nunca perdió el foco durante la transcripción).
+    private static let reactivationDelay: Duration = .milliseconds(120)
+    /// `kVK_ANSI_V`, sin importar `Carbon.HIToolbox` solo por esta constante — mismo criterio que
+    /// `HotkeyTrigger.fnSpace` (keyCode 49) en `GlobalHotkeyService.swift`.
+    private static let pasteKeyCode: CGKeyCode = 9
+
     private let frontmostApplicationProvider: () -> NSRunningApplication?
     private let ownBundleIdentifier: String?
+    private let isAccessibilityPermissionGranted: () -> Bool
+    private let isFocusedElementSecure: () -> Bool
+    private let writeToPasteboard: (String) -> Bool
+    private let activateTarget: (NSRunningApplication) -> Void
+    private let postPasteKeystroke: () -> Bool
 
     init(
         frontmostApplicationProvider: @escaping () -> NSRunningApplication? = { NSWorkspace.shared.frontmostApplication },
-        ownBundleIdentifier: String? = Bundle.main.bundleIdentifier
+        ownBundleIdentifier: String? = Bundle.main.bundleIdentifier,
+        isAccessibilityPermissionGranted: @escaping () -> Bool = { AXIsProcessTrusted() },
+        isFocusedElementSecure: @escaping () -> Bool = LiveAutoPasteService.systemFocusedElementIsSecure,
+        writeToPasteboard: @escaping (String) -> Bool = LiveAutoPasteService.writeStringToGeneralPasteboard,
+        activateTarget: @escaping (NSRunningApplication) -> Void = { $0.activate() },
+        postPasteKeystroke: @escaping () -> Bool = LiveAutoPasteService.postCommandVKeystroke
     ) {
         self.frontmostApplicationProvider = frontmostApplicationProvider
         self.ownBundleIdentifier = ownBundleIdentifier
+        self.isAccessibilityPermissionGranted = isAccessibilityPermissionGranted
+        self.isFocusedElementSecure = isFocusedElementSecure
+        self.writeToPasteboard = writeToPasteboard
+        self.activateTarget = activateTarget
+        self.postPasteKeystroke = postPasteKeystroke
     }
 
     func captureTarget() -> AutoPasteTarget? {
@@ -90,6 +123,57 @@ final class LiveAutoPasteService: AutoPasteServicing {
     }
 
     func paste(text: String, target: AutoPasteTarget) async -> AutoPasteResult {
-        .unknown
+        guard !text.isEmpty else { return .emptyText }
+        guard isAccessibilityPermissionGranted() else { return .accessibilityPermissionMissing }
+        guard !target.runningApplication.isTerminated else { return .targetUnavailable }
+        guard !isFocusedElementSecure() else { return .secureField }
+        guard writeToPasteboard(text) else { return .pasteboardFailed }
+
+        if frontmostApplicationProvider()?.processIdentifier != target.processIdentifier {
+            activateTarget(target.runningApplication)
+            try? await Task.sleep(for: Self.reactivationDelay)
+        }
+
+        return postPasteKeystroke() ? .pasted : .eventPostFailed
+    }
+
+    /// Mejor esfuerzo, no garantizado: pregunta por el rol del elemento con foco vía la API de
+    /// Accesibilidad a nivel de sistema. Algunos toolkits (Electron y similares) no exponen
+    /// subrole, así que un campo seguro ahí no se detecta — se documenta como limitación conocida
+    /// en vez de intentar cubrir cada toolkit puntualmente.
+    private static func systemFocusedElementIsSecure() -> Bool {
+        let systemWide = AXUIElementCreateSystemWide()
+        var focused: AnyObject?
+        guard AXUIElementCopyAttributeValue(systemWide, kAXFocusedUIElementAttribute as CFString, &focused) == .success,
+              let focusedElement = focused else {
+            return false
+        }
+        var subrole: AnyObject?
+        guard AXUIElementCopyAttributeValue(focusedElement as! AXUIElement, kAXSubroleAttribute as CFString, &subrole) == .success,
+              let subroleString = subrole as? String else {
+            return false
+        }
+        return subroleString == kAXSecureTextFieldSubrole as String
+    }
+
+    private static func writeStringToGeneralPasteboard(_ text: String) -> Bool {
+        let pasteboard = NSPasteboard.general
+        pasteboard.clearContents()
+        return pasteboard.setString(text, forType: .string)
+    }
+
+    /// Sintetiza ⌘V con `CGEvent`, igual que lo haría un teclado real — mismo mecanismo que un
+    /// "Copiar" + ⌘V manual, solo que disparado por código.
+    private static func postCommandVKeystroke() -> Bool {
+        guard let source = CGEventSource(stateID: .hidSystemState),
+              let keyDown = CGEvent(keyboardEventSource: source, virtualKey: pasteKeyCode, keyDown: true),
+              let keyUp = CGEvent(keyboardEventSource: source, virtualKey: pasteKeyCode, keyDown: false) else {
+            return false
+        }
+        keyDown.flags = .maskCommand
+        keyUp.flags = .maskCommand
+        keyDown.post(tap: .cgSessionEventTap)
+        keyUp.post(tap: .cgSessionEventTap)
+        return true
     }
 }

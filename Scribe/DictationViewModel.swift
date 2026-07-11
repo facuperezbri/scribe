@@ -120,6 +120,12 @@ final class DictationViewModel: ObservableObject {
     @Published var inputLevel: Float = 0
     @Published var hotkeyStatus: HotkeyStatus = .unknown
     @Published private(set) var lastTranscriptionOutcome: TranscriptionOutcome?
+    /// Resultado del último intento de auto-paste, si hubo uno. `nil` significa "no se intentó"
+    /// (sin destino capturado, o transcripción vacía/fallida/cancelada), no "falló" — para
+    /// distinguir eso, ver el caso puntual de `AutoPasteResult`. Todavía no hay UI que lo
+    /// muestre (llega en la Fase 6); existe ya para que la Fase 7 pueda probarlo sin re-cablear
+    /// nada.
+    @Published private(set) var lastAutoPasteResult: AutoPasteResult?
     /// Tarjeta de bienvenida de primer lanzamiento (`OnboardingWelcomeView`). Se apaga para
     /// siempre en cuanto el usuario la descarta (`dismissOnboardingWelcome()`); no vuelve a
     /// aparecer en lanzamientos siguientes ni tiene un botón para volver a mostrarla.
@@ -430,6 +436,7 @@ final class DictationViewModel: ObservableObject {
         capturedAutoPasteTarget = autoPasteService.captureTarget()
         state.session = .startingRecording
         lastTranscriptionOutcome = nil
+        lastAutoPasteResult = nil
         Task {
             await startRecordingFlow()
         }
@@ -613,6 +620,7 @@ final class DictationViewModel: ObservableObject {
             audioRecorder.deleteCurrentFile()
             lastRecordingURL = nil
             lastTranscriptionOutcome = .success
+            performAutoPasteIfNeeded(text: text)
 
         case .failure(let appError):
             state.session = .idle
@@ -621,6 +629,23 @@ final class DictationViewModel: ObservableObject {
             lastTranscriptionOutcome = .failure
         }
         transcriptionTask = nil
+    }
+
+    /// Efecto secundario de una transcripción exitosa, no un paso más del flujo de
+    /// grabar/transcribir: arranca en una `Task` aparte para no retener `state.session` en
+    /// `.transcribing` mientras el pegado sintético (que incluye la espera de reactivación de
+    /// `LiveAutoPasteService`) termina. Nunca toca `transcript`/`previousTranscript` — si falla,
+    /// el texto ya quedó guardado arriba, disponible para copiar a mano sin importar el resultado.
+    /// No hace nada si no hay destino capturado (dictado iniciado desde la propia ventana de
+    /// Scribe, o `captureTarget()` no encontró nada) o si el texto vino vacío.
+    private func performAutoPasteIfNeeded(text: String) {
+        guard !text.isEmpty, let target = capturedAutoPasteTarget else { return }
+        capturedAutoPasteTarget = nil
+        let service = autoPasteService
+        Task { [weak self] in
+            let result = await service.paste(text: text, target: target)
+            self?.lastAutoPasteResult = result
+        }
     }
 
     /// Descarga del modelo iniciada explícitamente por el usuario (botón "Descargar modelo").

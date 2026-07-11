@@ -179,11 +179,14 @@ final class FakeAutoPasteService: AutoPasteServicing {
 }
 
 /// `AutoPasteTarget` envuelve un `NSRunningApplication` vivo, que no tiene inicializador público:
-/// los tests usan `.current` (el propio proceso de test) como relleno, ya que solo los campos
-/// planos (`bundleIdentifier`/`localizedName`/`processIdentifier`) importan para las aserciones.
+/// los tests usan `.current` (el propio proceso de test) como relleno. El campo plano
+/// `processIdentifier` default coincide con el pid real de `.current` a propósito, para que las
+/// pruebas de `LiveAutoPasteService.paste` que comparan contra `frontmostApplicationProvider()`
+/// (¿el destino ya es la app frontmost?) sean consistentes; pasar otro valor explícito simula un
+/// destino que ya no es el frontmost.
 extension AutoPasteTarget {
     static func fake(
-        processIdentifier: pid_t = 12345,
+        processIdentifier: pid_t = NSRunningApplication.current.processIdentifier,
         bundleIdentifier: String? = "com.example.target",
         localizedName: String? = "Target de prueba"
     ) -> AutoPasteTarget {
