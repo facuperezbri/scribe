@@ -158,6 +158,12 @@ final class DictationViewModel: ObservableObject {
     /// destino al que pegarle.
     private(set) var capturedAutoPasteTarget: AutoPasteTarget?
     private var transcriptionTask: Task<Void, Never>?
+    /// Id del intento de auto-paste en curso (Fase 7), mismo criterio que `TranscriptionAttemptCoordinator`:
+    /// `paste(text:target:)` corre en un `Task` separado que puede tardar más que un ciclo
+    /// completo de grabar+transcribir si el usuario dicta de nuevo enseguida (frase corta,
+    /// transcripción rápida). Sin este guard, el resultado tardío de una sesión ya abandonada
+    /// pisaría `lastAutoPasteResult` de la sesión nueva.
+    private var currentAutoPasteAttempt: UUID?
 
     init(
         audioRecorder: AudioRecordingServicing = AudioRecorderService(),
@@ -443,6 +449,9 @@ final class DictationViewModel: ObservableObject {
         state.session = .startingRecording
         lastTranscriptionOutcome = nil
         lastAutoPasteResult = nil
+        // Invalida cualquier auto-paste todavía en vuelo de la sesión anterior: ver comentario en
+        // `currentAutoPasteAttempt`.
+        currentAutoPasteAttempt = nil
         Task {
             await startRecordingFlow()
         }
@@ -651,9 +660,12 @@ final class DictationViewModel: ObservableObject {
         capturedAutoPasteTarget = nil
         guard isAutoPasteEnabled, !text.isEmpty else { return }
         let service = autoPasteService
+        let attemptID = UUID()
+        currentAutoPasteAttempt = attemptID
         Task { [weak self] in
             let result = await service.paste(text: text, target: target)
-            self?.lastAutoPasteResult = result
+            guard let self, self.currentAutoPasteAttempt == attemptID else { return }
+            self.lastAutoPasteResult = result
         }
     }
 

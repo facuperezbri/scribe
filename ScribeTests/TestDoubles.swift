@@ -160,6 +160,10 @@ final class FakeWindowActivationService: WindowActivationServicing {
 final class FakeAutoPasteService: AutoPasteServicing {
     var targetToCapture: AutoPasteTarget?
     var pasteResult: AutoPasteResult = .pasted
+    /// Simula un auto-paste lento, para tests que necesitan arrancar una grabación nueva mientras
+    /// el `paste(text:target:)` anterior sigue "en vuelo" (ver `currentAutoPasteAttempt` en
+    /// `DictationViewModel`).
+    var delayMilliseconds: UInt64 = 0
     private(set) var captureTargetCallCount = 0
     private(set) var pasteCallCount = 0
     private(set) var lastPastedText: String?
@@ -174,6 +178,9 @@ final class FakeAutoPasteService: AutoPasteServicing {
         pasteCallCount += 1
         lastPastedText = text
         lastPasteTarget = target
+        if delayMilliseconds > 0 {
+            try? await Task.sleep(for: .milliseconds(delayMilliseconds))
+        }
         return pasteResult
     }
 }
