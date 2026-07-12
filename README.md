@@ -98,6 +98,10 @@ a small transcript card, and a thin footer.
    screen shows recording/transcribing feedback instead, and a menu bar item
    is always available as an alternative way to start/stop, show the
    window, or copy the last transcript.
+7. As soon as that transcription is ready, Scribe automatically pastes it
+   into whichever app was focused right before you started dictating — see
+   "Auto-paste" below. "Copiar" keeps working exactly as before regardless
+   of whether the auto-paste succeeded.
 
 ### Global Fn + Espacio shortcut and Accessibility permission
 
@@ -130,6 +134,51 @@ observable this way. Space isn't one of the reassigned keys, so Fn + Espacio
 is expected to arrive as a normal `keyDown` with `.function` set — but this
 hasn't been confirmed on real hardware across every keyboard model (see
 "Manual QA checklist" below).
+
+### Auto-paste
+
+Once a transcription succeeds, Scribe pastes it automatically into whichever app had focus right
+before recording started — no manual "Copiar" + ⌘V needed. This only fires when dictation started
+with some other app in front; starting a recording from Scribe's own "Grabar" button has nothing
+to paste into, so nothing is attempted.
+
+- **Target capture.** `AutoPasteServicing.captureTarget()` reads the frontmost app
+  (`NSWorkspace.shared.frontmostApplication`) synchronously the instant recording starts — before
+  any permission dialog or window activation could change which app is in front — and excludes
+  Scribe itself.
+- **Paste mechanism.** `LiveAutoPasteService` writes the transcript to the general pasteboard and
+  synthesizes ⌘V with `CGEvent`, the same mechanism a real keypress would trigger, so it respects
+  whatever paste handling the target app already has (rich text, undo, etc.). If the user switched
+  to a different app while transcription was running, Scribe reactivates the *original* target app
+  first (with a short settling delay) before sending ⌘V — a deliberate, narrow exception to the
+  background-first philosophy described above, scoped to auto-paste only.
+- **Clipboard preservation.** Whatever was on the clipboard before the auto-paste write is restored
+  right after pasting, unless something else (almost always the user copying something new) wrote
+  to the clipboard in the meantime — detected via the pasteboard's `changeCount` — in which case
+  that newer content is left alone instead of being clobbered.
+- **Secure fields.** If the focused element in the target app looks like a password field
+  (`kAXSecureTextFieldSubrole`, checked via the Accessibility API), auto-paste is skipped silently:
+  no keystroke, no clipboard write. This is best-effort — some toolkits (e.g. Electron) don't
+  expose a subrole, so a secure field there won't be detected.
+- **Permission reuse.** Auto-paste needs the same Accessibility permission the Fn + Espacio
+  shortcut already requests above — no second prompt. If it isn't granted, auto-paste is silently
+  skipped and "Copiar" remains the only way to get the text out, exactly as it worked before this
+  feature existed.
+- **Failure is silent but visible.** A skipped or failed auto-paste never shows a modal dialog. The
+  floating overlay's "Listo" checkmark becomes "Pegado" after a successful paste; a short status
+  line appears next to "Estado actual" in the menu bar's menu for outcomes worth mentioning (target
+  app closed, permission missing, secure field, or the keystroke failing to post). Non-attempts (no
+  target captured, empty transcript) show nothing at all, and the transcript/"Copiar" are never
+  affected either way.
+- **Turning it off.** The menu bar menu has a "Pegado automático" toggle, on by default and
+  persisted across launches. There's no equivalent switch in the main window — the menu bar is the
+  only place to change it.
+- **Stale results across sessions.** Transcribing and pasting are both async; if a new recording
+  starts before a slow-resolving auto-paste from the previous session finishes, that late result is
+  discarded instead of overwriting the new session's status.
+
+See [docs/MVP5_AUTO_PASTE_PLAN.md](docs/MVP5_AUTO_PASTE_PLAN.md) for the implementation notes,
+design trade-offs, and the full manual QA checklist for this feature.
 
 ### Window activation
 
@@ -180,6 +229,7 @@ known limitation).
 | `ModelManager.swift` | Presence and explicit download of the WhisperKit model. |
 | `TranscriptionService.swift` | Wraps WhisperKit to transcribe locally. |
 | `ClipboardService.swift` | Copies text to the clipboard. |
+| `AutoPasteService.swift` | Captures the pre-recording frontmost app and pastes a successful transcription into it via the clipboard + a synthetic ⌘V (`AutoPasteServicing`). |
 | `AppError.swift` | Typed app error model and its category-to-message mapping. |
 
 Direct use of WhisperKit is confined to `ModelManager` and
@@ -400,15 +450,23 @@ consolidates the checks called out throughout this document:
   is unaffected.
 - **Floating overlay** — confirm it shows a mic-level indicator while
   recording (bars should react to actual mic input), a cascading-dots
-  indicator while transcribing, and a brief checkmark "Listo" flash after a
-  successful transcription that disappears on its own; confirm it does NOT
-  flash "Listo" after a cancelled or failed transcription, or on app launch
-  with a previously restored transcript.
+  indicator while transcribing, and a brief checkmark flash after a
+  successful transcription that disappears on its own — "Pegado" if
+  auto-paste succeeded, "Listo" otherwise; confirm it does NOT flash after a
+  cancelled or failed transcription, or on app launch with a previously
+  restored transcript.
 - **Menu bar item** — confirm the icon changes between idle, recording,
   busy/transcribing, downloading, and needs-attention states; confirm
   "Iniciar dictado"/"Detener dictado", "Copiar última transcripción",
-  "Mostrar Scribe", and the permission/model shortcuts in the menu all work
-  and stay in sync with the main window's own controls.
+  "Mostrar Scribe", the "Pegado automático" toggle, and the permission/model
+  shortcuts in the menu all work and stay in sync with the main window's own
+  controls.
+- **Auto-paste** — see the dedicated, more detailed checklist in
+  [docs/MVP5_AUTO_PASTE_PLAN.md](docs/MVP5_AUTO_PASTE_PLAN.md); at minimum,
+  confirm a dictation started from another app pastes into that app
+  automatically, "Copiar" still works regardless of the paste outcome, and
+  toggling "Pegado automático" off in the menu bar actually stops the paste
+  from happening.
 - **Instant replace + undo** — with a transcript already showing, record
   again (button or hotkey): it should start immediately with no dialog. Once
   transcribed, a "Deshacer reemplazo" pill should appear; clicking it should
@@ -458,9 +516,18 @@ consolidates the checks called out throughout this document:
 - The floating overlay always positions itself on `NSScreen.main`; on a
   multi-monitor setup it won't follow the display the user is currently
   working on.
+- Auto-paste's reactivation/clipboard-restore delays are fixed heuristics
+  (120ms/200ms), not measured across a representative set of real apps or
+  hardware; secure-field detection is best-effort and misses toolkits that
+  don't expose an Accessibility subrole (e.g. some Electron apps); clipboard
+  restore only preserves plain text, not other content types; and the
+  "Pegado automático" toggle is global, with no per-app configuration. See
+  [docs/MVP5_AUTO_PASTE_PLAN.md](docs/MVP5_AUTO_PASTE_PLAN.md) for the full
+  list.
 
 ## Learn more
 
 - [docs/DECISIONS.md](docs/DECISIONS.md) — the *why* behind non-obvious design choices.
 - [docs/CHANGELOG.md](docs/CHANGELOG.md) — how Scribe got to its current shape, phase by phase.
-- [docs/ROADMAP.md](docs/ROADMAP.md) — tentative next steps (auto-paste, live transcription, history, model selector, distribution).
+- [docs/MVP5_AUTO_PASTE_PLAN.md](docs/MVP5_AUTO_PASTE_PLAN.md) — auto-paste's design trade-offs, implementation notes, and manual QA checklist.
+- [docs/ROADMAP.md](docs/ROADMAP.md) — tentative next steps (live transcription, transcript history, a configurable shortcut, hold-to-talk, a model/language selector, distribution).

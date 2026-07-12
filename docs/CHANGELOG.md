@@ -4,7 +4,49 @@ Historical record of how Scribe got to its current shape, newest first. This is 
 phase/MVP references — unlike code comments and the README, a changelog's whole purpose is being
 a timeline. For the *why* behind specific choices, see [DECISIONS.md](DECISIONS.md).
 
-## MVP4.5 — consolidation before auto-paste (in progress)
+## MVP5 — auto-paste
+
+Added automatic pasting of a successful transcription into whichever app was focused right before
+Fn + Espacio (or the record button) was pressed, closing the gap between "transcription ready" and
+the text actually landing in whatever the user was writing — no manual "Copiar" + ⌘V required. See
+[MVP5_AUTO_PASTE_PLAN.md](MVP5_AUTO_PASTE_PLAN.md) for the design questions this answered, the
+implementation notes, and the manual QA checklist.
+
+- **Phase 2** — added the `AutoPasteServicing` protocol and the `AutoPasteResult`/`AutoPasteTarget`
+  types (`AutoPasteService.swift`), with a `Live`/`Fake` pair following the same DI pattern as
+  `ClipboardServicing`/`WindowActivationServicing`; not wired into `DictationViewModel` yet.
+- **Phase 3** — `DictationViewModel.startRecordingIfPossible()` captures the frontmost app
+  (`capturedAutoPasteTarget`) synchronously before anything else runs, so a permission dialog or
+  window activation can't change which app auto-paste will target later.
+- **Phase 4** — implemented `LiveAutoPasteService.paste(text:target:)`: writes the transcript to
+  the general pasteboard and synthesizes ⌘V via `CGEvent`, reactivating the target app first if
+  it's no longer frontmost (with a short settling delay). Gated on the same Accessibility
+  permission the global hotkey already needs; skips silently on a secure focused field
+  (`kAXSecureTextFieldSubrole`), an unavailable/terminated target, or empty text.
+- **Phase 5** — restores whatever was on the clipboard before the auto-paste write, unless the
+  pasteboard's `changeCount` shows something else wrote to it in the meantime (most likely the
+  user copying something new mid-paste) — that newer content is left alone instead of being
+  clobbered.
+- **Phase 6** — feedback and an off switch: the floating overlay's "Listo" checkmark becomes
+  "Pegado" after a successful auto-paste; a short status line appears in the menu bar's menu for
+  failures worth mentioning (`DictationViewModel.autoPasteStatusText`); a "Pegado automático"
+  toggle in the menu bar (`isAutoPasteEnabled`/`setAutoPasteEnabled(_:)`) turns it off entirely,
+  persisted in `UserDefaults` and on by default.
+- **Phase 7** — guarded against a stale auto-paste result: if a new recording starts before a
+  slow-resolving auto-paste from the previous session finishes, that late result is now discarded
+  instead of overwriting `lastAutoPasteResult` for the new session (`currentAutoPasteAttempt`, the
+  same UUID-comparison pattern `TranscriptionAttemptCoordinator` already used for transcription
+  results).
+- **Phase 8** — README and docs finalization: documented auto-paste's behavior end-to-end in the
+  README, converted `MVP5_AUTO_PASTE_PLAN.md` from a pre-implementation readiness doc into
+  implementation notes + a full manual QA checklist + known limitations, and updated this changelog
+  and `ROADMAP.md` to reflect that MVP5 shipped.
+
+Covered by `AutoPasteServiceTests`, `DictationViewModelAutoPasteCaptureTests`,
+`DictationViewModelAutoPasteTriggerTests`, and `DictationViewModelAutoPasteToggleTests`, on top of
+the existing suite.
+
+## MVP4.5 — consolidation before auto-paste
 
 Housekeeping pass before starting auto-paste: split `DictationViewModel` into focused, independently
 tested controllers (`PermissionStatusController`, `TranscriptSessionController`, `RecordingMeter`,
@@ -130,10 +172,11 @@ a transcript that's secondary rather than the dominant element.
 - `StatusBadgeView` was retired as redundant with `DictationStatusView`'s title + icon color.
 - The window's minimum size went from 440×580 to 380×460.
 
-Deliberately out of scope at the time (still true today): auto-paste, hold-to-talk, a configurable
-shortcut, AI cleanup, history, a model selector, and always-on-top/floating window behavior for the
-main window itself (the floating *overlay* added in MVP4 is a separate, narrower thing — see
-[DECISIONS.md](DECISIONS.md)).
+Deliberately out of scope at the time: auto-paste (shipped later, see MVP5 above), hold-to-talk, a
+configurable shortcut, AI cleanup, history, a model selector, and always-on-top/floating window
+behavior for the main window itself (the floating *overlay* added in MVP4 is a separate, narrower
+thing — see [DECISIONS.md](DECISIONS.md)). Hold-to-talk, the configurable shortcut, history, and
+the model selector are still out of scope today — see [ROADMAP.md](ROADMAP.md).
 
 ## Phase 7 — window activation and app focus
 

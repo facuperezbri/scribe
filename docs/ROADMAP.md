@@ -1,23 +1,21 @@
 # Roadmap
 
 Tentative, in priority order. Nothing here is committed or scheduled — it's a wishlist, not a plan
-with dates. See [CHANGELOG.md](CHANGELOG.md) for what already shipped and [DECISIONS.md](DECISIONS.md)
-for the reasoning behind the current architecture these build on top of.
+with dates. See [CHANGELOG.md](CHANGELOG.md) for what already shipped (including auto-paste, see
+MVP5 there) and [DECISIONS.md](DECISIONS.md) for the reasoning behind the current architecture
+these build on top of.
 
-1. **Auto-paste** — paste the transcription result directly into whichever app was focused before
-   the shortcut was pressed, instead of requiring a manual "Copiar" + ⌘V. The global Fn + Espacio
-   shortcut, its permission UX, and window activation are already in place as building blocks. See
-   [MVP5_AUTO_PASTE_PLAN.md](MVP5_AUTO_PASTE_PLAN.md) for the readiness/design notes.
-2. **Live transcription** — show a partial transcript while still recording, instead of waiting for
+1. **Live transcription** — show a partial transcript while still recording, instead of waiting for
    "Detener".
-3. **Transcript history** — a real history of past transcriptions; today only the last one is
-   persisted, plus a single-slot undo buffer (see [DECISIONS.md](DECISIONS.md)).
-4. **Model selector** — choose between Whisper variants depending on the speed/accuracy trade-off
-   each user prefers.
-5. **Distribution cleanup** — notarization, DMG/installer, and whatever else App Store or
+2. **Transcript history** — a lightweight real history of past transcriptions; today only the last
+   one is persisted, plus a single-slot undo buffer (see [DECISIONS.md](DECISIONS.md)).
+3. **Configurable shortcut / fallback shortcut** — a way to change the Fn + Espacio combo, or fall
+   back to a different one, for keyboards/setups where it turns out not to be reliable.
+   `HotkeyTrigger` (see [DECISIONS.md](DECISIONS.md)) already makes the combo an injectable value
+   internally; this item is about exposing that as an actual user-facing setting.
+4. **Hold-to-talk mode** — record while a key is held down instead of toggling with two presses, as
+   an alternative to the current always-toggle behavior.
+5. **Model/language selector** — choose between Whisper variants depending on the speed/accuracy
+   trade-off each user prefers, and/or a language other than Spanish.
+6. **Distribution cleanup** — notarization, DMG/installer, and whatever else App Store or
    direct-download distribution ends up requiring (the app icon itself already shipped).
-
-Note: earlier drafts of this roadmap used "MVP3"/"MVP5"/"MVP6"/"MVP7" labels for these same items.
-Those numbers are dropped here because they'd already collided with the MVP3/MVP4 names used for
-work that has since shipped (see [CHANGELOG.md](CHANGELOG.md)) — plain descriptive names don't have
-that problem.
