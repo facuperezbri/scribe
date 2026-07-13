@@ -88,7 +88,7 @@ struct ContentView: View {
 
                 HotkeyStatusView(
                     status: viewModel.hotkeyStatus,
-                    onOpenSettings: viewModel.openAccessibilityPrivacySettings,
+                    onOpenSettings: viewModel.openInputMonitoringPrivacySettings,
                     onRefresh: viewModel.refreshHotkeyStatus
                 )
 

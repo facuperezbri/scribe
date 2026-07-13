@@ -64,7 +64,7 @@ The window is a compact dictation utility, not a document editor: a header,
 a central status area that's the main thing you look at, the record button,
 a small transcript card, and a thin footer.
 
-1. Press "Grabar" (or Fn + Espacio, see below) and speak in Spanish. While
+1. Press "Grabar" (or hold Fn, see below) and speak in Spanish. While
    recording, the central status area shows a pulsing red indicator, the
    elapsed time, a meter for the microphone's input level (to confirm audio
    is being captured), and, past 2 and 5 minutes, a warning that the
@@ -89,51 +89,75 @@ a small transcript card, and a thin footer.
    with no way back (see [docs/DECISIONS.md](docs/DECISIONS.md) for why).
 5. Once the model is installed, "Ver en Finder" opens the folder where it
    lives on disk.
-6. Pressing Fn + Espacio anywhere in macOS — not just with Scribe's window
+6. Holding Fn anywhere in macOS — not just with Scribe's window
    focused — starts recording, exactly as if the "Grabar" button had been
-   pressed; pressing it again stops and starts transcription. Holding it
-   down doesn't repeat-trigger it. The shortcut is **background-first**: it
-   never brings Scribe's window to the front or steals focus from whichever
-   app you're dictating into. A small floating overlay near the top of the
-   screen shows recording/transcribing feedback instead, and a menu bar item
-   is always available as an alternative way to start/stop, show the
-   window, or copy the last transcript.
+   pressed; releasing it stops and starts transcription, push-to-talk style
+   (Whispr's default shortcut). Tapping Fn twice quickly instead locks
+   recording on without holding it down (hands-free); a third tap stops it.
+   The shortcut is **background-first**: it never brings Scribe's window to
+   the front or steals focus from whichever app you're dictating into. A
+   small floating overlay near the bottom of the screen shows
+   recording/transcribing feedback instead, and a menu bar item is always
+   available as an alternative way to start/stop, show the window, or copy
+   the last transcript.
 7. As soon as that transcription is ready, Scribe automatically pastes it
    into whichever app was focused right before you started dictating — see
    "Auto-paste" below. "Copiar" keeps working exactly as before regardless
    of whether the auto-paste succeeded.
 
-### Global Fn + Espacio shortcut and Accessibility permission
+### Global Fn shortcut and Input Monitoring permission
 
-A global event monitor (`NSEvent.addGlobalMonitorForEvents(matching: .keyDown)`,
-plus a local one for when Scribe itself is focused — see
-[docs/DECISIONS.md](docs/DECISIONS.md)) checks for Space (keyCode 49) with the
-`.function` modifier flag set and `isARepeat == false`. macOS only delivers
-those events if the app has been granted the **Accessibility** permission
-(Ajustes del Sistema → Privacidad y seguridad → Accesibilidad). Scribe never
-shows the native Accessibility prompt itself (`AXIsProcessTrustedWithOptions`
-is not used) — it only checks silently with `AXIsProcessTrusted()` and
-reflects the result in the UI, so granting the permission is always the
-user's explicit choice from System Settings, not something the app pushes on
-launch.
+A single `CGEventTap` (`CGEvent.tapCreate` on `.cghidEventTap`, watching
+`flagsChanged` — see [docs/DECISIONS.md](docs/DECISIONS.md)) watches the
+`.function` modifier flag and fires on each rising/falling edge (Fn pressed /
+Fn released), whether or not Scribe itself is focused. Unlike a plain
+`NSEvent` monitor, a tap can *consume* the event instead of just observing
+it — Scribe returns `nil` from the tap callback on a real trigger edge, which
+is an attempt at keeping macOS's own system Fn action (see below) from also
+seeing that same press.
 
-If that permission hasn't been granted yet, pressing Fn + Espacio does
-nothing, and Scribe shows a small status message next to the model status
-explaining why ("Para usar Fn + Espacio desde cualquier app, Scribe necesita
-permiso de Accesibilidad."), with an "Abrir Ajustes" button that opens the
-Accessibility privacy pane directly, and a "Revisar permiso" button to
-recheck without restarting the app. The status also rechecks automatically
-whenever the app becomes active again (e.g. after returning from System
-Settings). Missing this permission is non-fatal: the record/stop button in
-the main window always works regardless of it.
+macOS only delivers events to a `CGEventTap` if the app has been granted the
+**Input Monitoring** permission (Ajustes del Sistema → Privacidad y seguridad
+→ Monitoreo de entrada) — a different TCC permission from Accessibility, and
+not the same one Auto-paste needs for its synthetic ⌘V (see "Auto-paste"
+below; that one is unaffected by this). Scribe never shows a native
+permission prompt for this itself — it only checks silently
+(`IOHIDCheckAccess(kIOHIDRequestTypeListenEvent)`) and reflects the result in
+the UI, so granting it is always the user's explicit choice from System
+Settings.
 
-**Known limitation:** Fn combined with certain keys (arrows, Delete, F-keys)
-is intercepted by the keyboard driver for built-in system functions before it
-reaches any app as a modifier flag, so not every Fn+key combination is
-observable this way. Space isn't one of the reassigned keys, so Fn + Espacio
-is expected to arrive as a normal `keyDown` with `.function` set — but this
-hasn't been confirmed on real hardware across every keyboard model (see
-"Manual QA checklist" below).
+If that permission hasn't been granted yet, holding Fn does nothing, and
+Scribe shows a small status message next to the model status explaining why
+("Para usar Fn desde cualquier app, Scribe necesita permiso de Monitoreo de
+entrada."), with an "Abrir Ajustes" button that opens that privacy pane
+directly, and a "Revisar permiso" button to recheck without restarting the
+app. The status also rechecks automatically whenever the app becomes active
+again (e.g. after returning from System Settings). Missing this permission is
+non-fatal: the record/stop button in the main window always works regardless
+of it.
+
+**Hands-free mode:** tapping Fn twice quickly (within `doubleTapWindow`,
+which defaults to the system's double-click interval) locks recording on
+without holding the key down; releasing while locked does nothing, and one
+more tap stops it immediately. This adds that same short delay to *every*
+normal push-to-talk release (not just double-taps), since Scribe has to wait
+briefly to see whether a second tap is coming. See
+[docs/DECISIONS.md](docs/DECISIONS.md) for the state machine.
+
+**Known limitation — conflicts with macOS's own Fn action, suppression
+unverified:** System Settings → Keyboard → "Press 🌐 Fn key to:" lets you bind
+a bare Fn tap to a system action (change input source, show Emoji & Symbols,
+start Dictation). That's the exact same gesture Scribe's shortcut listens
+for. Scribe now *attempts* to suppress that system action via the event tap
+described above, matching what Wispr Flow appears to do — but this hasn't
+been confirmed on real hardware in this environment, so treat it as
+best-effort, not a guarantee. If it doesn't work in practice, or you'd rather
+not rely on it, set "Press 🌐 Fn key to:" to "Do Nothing" in System Settings →
+Keyboard (the same requirement Whispr documents for its own default
+shortcut) as a reliable fallback. If that's not viable for you,
+`HotkeyModifierTrigger` in `GlobalHotkeyService.swift` is the point of change
+to fall back to a different modifier (e.g. Control). Also unconfirmed on real
+hardware across every keyboard model (see "Manual QA checklist" below).
 
 ### Auto-paste
 
@@ -160,10 +184,10 @@ to paste into, so nothing is attempted.
   (`kAXSecureTextFieldSubrole`, checked via the Accessibility API), auto-paste is skipped silently:
   no keystroke, no clipboard write. This is best-effort — some toolkits (e.g. Electron) don't
   expose a subrole, so a secure field there won't be detected.
-- **Permission reuse.** Auto-paste needs the same Accessibility permission the Fn + Espacio
-  shortcut already requests above — no second prompt. If it isn't granted, auto-paste is silently
-  skipped and "Copiar" remains the only way to get the text out, exactly as it worked before this
-  feature existed.
+- **Permission reuse.** Auto-paste needs its own Accessibility permission for the synthetic ⌘V,
+  separate from the Fn shortcut's Input Monitoring permission described above — granting one does
+  not grant the other. If Accessibility isn't granted, auto-paste is silently skipped and "Copiar"
+  remains the only way to get the text out, exactly as it worked before this feature existed.
 - **Failure is silent but visible.** A skipped or failed auto-paste never shows a modal dialog. The
   floating overlay's "Listo" checkmark becomes "Pegado" after a successful paste; a short status
   line appears next to "Estado actual" in the menu bar's menu for outcomes worth mentioning (target
@@ -221,10 +245,10 @@ known limitation).
 | `TranscribingFeedbackView.swift` | Progress indicator and cancel button while transcribing (nested in `DictationStatusView`). |
 | `TranscriptEditorView.swift` | Editable transcript area, with placeholder and word/character counter. |
 | `ModelStatusView.swift` | Model status (installed / downloading / not installed). |
-| `HotkeyStatusView.swift` | Global Fn + Espacio shortcut status and Accessibility-permission recovery UI. |
+| `HotkeyStatusView.swift` | Global Fn shortcut status and Input-Monitoring-permission recovery UI. |
 | `PrivacyNoteView.swift` | Fixed privacy note at the bottom of the window. |
 | `AudioRecorderService.swift` | Records audio to a local WAV file (16 kHz, mono, 16-bit). |
-| `GlobalHotkeyService.swift` | Global Fn + Espacio monitor (`GlobalHotkeyServicing`) and its `HotkeyStatus`. |
+| `GlobalHotkeyService.swift` | Global Fn `CGEventTap` (`GlobalHotkeyServicing`), its `HotkeyStatus`, and the double-tap-to-lock hands-free state machine. |
 | `MicrophonePermissionManager.swift` | System microphone permission. |
 | `ModelManager.swift` | Presence and explicit download of the WhisperKit model. |
 | `TranscriptionService.swift` | Wraps WhisperKit to transcribe locally. |
@@ -268,7 +292,7 @@ covers the same risk without a blocking dialog.
 `PrimaryState` is a separate, derived mapping used only for the big title in
 `DictationStatusView` — `.ready`, `.recording`, `.stoppingRecording`,
 `.transcribing`, `.transcriptReady`, `.microphoneDenied`, `.missingModel`,
-`.downloadingModel`, `.accessibilityRequired`, `.error(message)`. See
+`.downloadingModel`, `.inputMonitoringRequired`, `.error(message)`. See
 [docs/DECISIONS.md](docs/DECISIONS.md) for why it's kept separate from
 `statusText` and how ties are broken between simultaneous blockers.
 
@@ -412,42 +436,53 @@ consolidates the checks called out throughout this document:
 
 - **Recording basics** — click the record button, speak, click again to
   stop; the transcript appears and "Copiar" puts it on the clipboard.
-- **Fn + Espacio (background-first)** — with another app focused (e.g. a
-  text editor) and Scribe's window closed or minimized, press Fn + Espacio:
-  recording should start with the floating overlay appearing near the top
+- **Fn (background-first)** — with another app focused (e.g. a
+  text editor) and Scribe's window closed or minimized, hold Fn:
+  recording should start with the floating overlay appearing near the bottom
   of the screen, and the other app should keep its focus/key window the
   whole time — Scribe's window must NOT come to the front or steal focus.
-  Press again to stop and transcribe.
-- **Fn + Espacio hardware validation** — the exact combo hasn't been
-  confirmed across every keyboard model (see
-  [docs/DECISIONS.md](docs/DECISIONS.md) for why: Fn-reassigned keys like
-  arrows are intercepted before reaching any app, and that's only confirmed
-  to be a non-issue for Space in theory, not tested on hardware). Repeat the
-  check above on as many of these as you have access to, and note which ones
-  were actually tried:
+  Release Fn to stop and transcribe.
+- **Fn hardware validation** — this hasn't been confirmed across every
+  keyboard model. Repeat the check above on as many of these as you have
+  access to, and note which ones were actually tried:
   - Built-in laptop keyboard (the most common case, and the most likely to
     already work correctly).
-  - Apple Magic Keyboard (with and without a dedicated Fn key — older/small
-    Magic Keyboards don't have one).
-  - A third-party keyboard with no dedicated Fn key at all.
+  - Apple Magic Keyboard.
+  - A third-party keyboard, especially one without a dedicated Fn key.
   - A keyboard remapped through a tool like Karabiner-Elements, since
-    remapping can change what keyCode/modifier combination actually reaches
-    Scribe.
+    remapping can change what modifier flag actually reaches Scribe.
   - If any of these fails: don't try to fix it by touching
-    `LiveGlobalHotkeyService`'s event-matching logic directly — the combo it
-    checks for is a single `HotkeyTrigger` value (`.fnSpace` by default; see
-    [docs/DECISIONS.md](docs/DECISIONS.md)) injected at construction, so a
-    confirmed hardware-specific fallback can be swapped in by passing a
-    different `HotkeyTrigger` to `LiveGlobalHotkeyService(trigger:)`,
-    without touching the monitor or permission code around it. This is a
-    code-level escape hatch, not a user-facing setting — a configurable
-    shortcut is still out of scope (see
+    `LiveGlobalHotkeyService`'s event-matching logic directly — the modifier
+    it checks for is a single `HotkeyModifierTrigger` value (`.function` by
+    default; see [docs/DECISIONS.md](docs/DECISIONS.md)) injected at
+    construction, so a confirmed hardware-specific fallback can be swapped in
+    by passing a different `HotkeyModifierTrigger` to
+    `LiveGlobalHotkeyService(trigger:)`, without touching the monitor or
+    permission code around it. This is a code-level escape hatch, not a
+    user-facing setting — a configurable shortcut is still out of scope (see
     [docs/ROADMAP.md](docs/ROADMAP.md)).
-- **Fn + Espacio while Scribe itself is focused** — with Scribe's own window
-  open and focused, confirm the shortcut still starts/stops recording (this
-  is the local-monitor path, distinct from the global-monitor path used when
-  another app has focus) and that typing normally in the transcript editor
-  is unaffected.
+- **Fn system-action suppression (unverified, needs real hardware)** — with
+  System Settings → Keyboard → "Press 🌐 Fn key to:" set to something other
+  than "Do Nothing" (e.g. "Change Input Source"), hold Fn to dictate and
+  observe whether that system action *also* fires. Scribe's `CGEventTap`
+  attempts to consume the event and suppress it (see
+  [docs/DECISIONS.md](docs/DECISIONS.md)) — this checklist item is what
+  actually confirms whether that works in practice, since nothing in this
+  development environment can test it. If the system action still fires
+  anyway, that's the known fallback case: set "Press 🌐 Fn key to:" to
+  "Do Nothing" and confirm only Scribe reacts.
+- **Fn while Scribe itself is focused** — with Scribe's own window
+  open and focused, confirm the shortcut still starts/stops recording (the
+  `CGEventTap` covers both this and the other-app-focused case with the same
+  mechanism) and that typing normally in the transcript editor is unaffected.
+- **Double-tap-to-lock hands-free mode (unverified, needs real hardware)** —
+  tap Fn twice quickly: recording should lock on and the overlay should stay
+  in the recording state without holding the key down. Release Fn while
+  locked: confirm recording does NOT stop. Tap Fn once more while locked:
+  confirm it stops immediately and transcribes. Separately, do a normal
+  single press-and-release (no second tap) and confirm it still stops and
+  transcribes as before, just with a brief extra delay
+  (`doubleTapWindow`/`NSEvent.doubleClickInterval`) before it does.
 - **Floating overlay** — confirm it shows a mic-level indicator while
   recording (bars should react to actual mic input), a cascading-dots
   indicator while transcribing, and a brief checkmark flash after a
@@ -480,10 +515,12 @@ consolidates the checks called out throughout this document:
 - **Microphone permission denied** — deny the permission (System Settings)
   and confirm the app shows the blocked state with a working "Abrir Ajustes
   del Sistema" button, without crashing or getting stuck.
-- **Accessibility permission required** — revoke Accessibility for Scribe
-  and confirm `HotkeyStatusView` shows the recovery UI ("Abrir Ajustes" /
-  "Revisar permiso"), and that the record button still works even though the
-  global shortcut doesn't.
+- **Input Monitoring permission required** — revoke Input Monitoring for
+  Scribe and confirm `HotkeyStatusView` shows the recovery UI ("Abrir
+  Ajustes" / "Revisar permiso"), and that the record button still works even
+  though the global shortcut doesn't. Granting it back and clicking
+  "Revisar permiso" (or reactivating the app) should clear the recovery UI
+  without restarting Scribe.
 - **Visual pass** — at the window's minimum size, confirm the status card
   and transcript card don't clip or overlap, and check both light and dark
   appearance (System Settings > Appearance).
@@ -509,10 +546,23 @@ consolidates the checks called out throughout this document:
   `ModelManager`.
 - No live transcription while recording; the floating overlay shows
   recording/transcribing feedback, not a partial transcript.
-- The global shortcut is fixed to Fn + Espacio; it isn't configurable and
-  there's no alternative combo.
-- No "hold to talk" mode: the shortcut always toggles start/stop, it never
-  records only while a key is held down.
+- The global shortcut is fixed to Fn; it isn't configurable and there's no
+  alternative combo or side (left/right).
+- Scribe attempts to suppress macOS's own "Press 🌐 Fn key to:" system action
+  via a `CGEventTap` so it doesn't also fire alongside Scribe's shortcut, but
+  this has **not been verified on real hardware** — this environment can't
+  run the app to confirm it. If it doesn't work in practice, setting
+  "Press 🌐 Fn key to:" to "Do Nothing" remains the reliable fallback — see
+  the known limitation above.
+- The double-tap-to-lock hands-free mode adds a short delay (defaults to the
+  system's double-click interval) to every push-to-talk release, not just
+  actual double-taps, so recording stops slightly later than it would
+  without that mode. Whether that delay feels right on a keyboard (as
+  opposed to the mouse double-click it borrows its default from) is also
+  unverified on real hardware.
+- The global shortcut now requires the **Input Monitoring** permission
+  instead of Accessibility (Auto-paste still needs Accessibility separately,
+  for its own synthetic ⌘V — see "Auto-paste" above).
 - The floating overlay always positions itself on `NSScreen.main`; on a
   multi-monitor setup it won't follow the display the user is currently
   working on.

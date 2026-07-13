@@ -30,8 +30,8 @@ struct PermissionStatusController {
         NSWorkspace.shared.open(url)
     }
 
-    func openAccessibilityPrivacySettings() {
-        guard let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility") else { return }
+    func openInputMonitoringPrivacySettings() {
+        guard let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ListenEvent") else { return }
         NSWorkspace.shared.open(url)
     }
 }

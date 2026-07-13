@@ -114,7 +114,8 @@ final class FakeTranscriptStore: TranscriptStoring {
 final class FakeGlobalHotkeyService: GlobalHotkeyServicing {
     var startResult: Result<Void, Error> = .success(())
     /// Lo que devuelve `currentStatus()`. Los tests lo cambian entre llamadas para simular, por
-    /// ejemplo, que el usuario otorgó el permiso de Accesibilidad después de que la app arrancó.
+    /// ejemplo, que el usuario otorgó el permiso de Monitoreo de entrada después de que la app
+    /// arrancó.
     var statusResult: HotkeyStatus = .active
     private(set) var startCallCount = 0
     private(set) var stopCallCount = 0

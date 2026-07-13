@@ -20,7 +20,7 @@ final class RecordingOverlayController {
 
     /// Cuánto se muestra "Listo" antes de desaparecer sola.
     private static let doneDisplayDuration: Duration = .milliseconds(1200)
-    private static let topMargin: CGFloat = 46
+    private static let bottomMargin: CGFloat = 46
     private static let fadeDuration: TimeInterval = 0.15
 
     init(viewModel: DictationViewModel) {
@@ -132,7 +132,7 @@ final class RecordingOverlayController {
         )
     }
 
-    /// Centra la burbuja horizontalmente, cerca del borde superior de la pantalla principal.
+    /// Centra la burbuja horizontalmente, cerca del borde inferior de la pantalla principal.
     /// Recalcula tamaño y posición en cada actualización visible porque el ancho del texto varía
     /// (por ejemplo, "Grabando 0:09" es más angosto que "Grabando 1:30").
     private func layoutPanel() {
@@ -143,7 +143,7 @@ final class RecordingOverlayController {
         let visibleFrame = screen.visibleFrame
         let origin = CGPoint(
             x: visibleFrame.midX - fittingSize.width / 2,
-            y: visibleFrame.maxY - Self.topMargin - fittingSize.height
+            y: visibleFrame.minY + Self.bottomMargin
         )
         panel.setFrame(NSRect(origin: origin, size: fittingSize), display: true)
     }

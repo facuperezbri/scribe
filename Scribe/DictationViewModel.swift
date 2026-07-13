@@ -98,7 +98,7 @@ enum PrimaryState: Equatable {
     case microphoneDenied
     case missingModel
     case downloadingModel
-    case accessibilityRequired
+    case inputMonitoringRequired
     case error(String)
 }
 
@@ -207,11 +207,14 @@ final class DictationViewModel: ObservableObject {
             }
         }
 
-        // Conecta el atajo global (Fn + Espacio) al mismo punto de entrada que usa el botón de la
-        // UI, sin duplicar lógica de grabar/detener. `try?` porque el registro puede fallar sin
-        // permiso de Accesibilidad (ver `LiveGlobalHotkeyService`); eso no debe impedir que el
-        // resto de la app arranque, y el monitor queda instalado igual para cuando el permiso se
-        // otorgue. No se llama a `windowActivationService.activateMainWindow()` acá — el atajo es
+        // Conecta el atajo global (mantener Fn presionada) al mismo punto de entrada que usa
+        // el botón de la UI, sin duplicar lógica de grabar/detener. El mismo callback dispara en
+        // ambos flancos (Fn abajo y arriba); `handlePrimaryDictationAction` ya decide qué
+        // hacer mirando solo el estado actual de la sesión, así que alcanza para mantener-presionado
+        // sin lógica adicional acá. `try?` porque el registro puede fallar sin permiso de
+        // Accesibilidad (ver `LiveGlobalHotkeyService`); eso no debe impedir que el resto de la app
+        // arranque, y el monitor queda instalado igual para cuando el permiso se otorgue. No se
+        // llama a `windowActivationService.activateMainWindow()` acá — el atajo es
         // "background-first": grabar/detener no debe robarle el foco a la app en la que está el
         // usuario. Traer la ventana al frente queda reservado para una acción explícita del
         // usuario (p. ej. "Mostrar Scribe" del menú de la barra de menús), no para cada presión
@@ -353,7 +356,7 @@ final class DictationViewModel: ObservableObject {
         if state.permission == .denied { return .microphoneDenied }
         if state.model == .missing { return .missingModel }
         if isDownloadingModel { return .downloadingModel }
-        if hotkeyStatus == .accessibilityPermissionRequired { return .accessibilityRequired }
+        if hotkeyStatus == .inputMonitoringPermissionRequired { return .inputMonitoringRequired }
         if !transcript.isEmpty { return .transcriptReady }
         return .ready
     }
@@ -387,7 +390,7 @@ final class DictationViewModel: ObservableObject {
         case .microphoneDenied: return "Permiso de micrófono requerido"
         case .missingModel: return "Modelo requerido"
         case .downloadingModel: return "Descargando modelo..."
-        case .accessibilityRequired: return "Permiso de Accesibilidad requerido"
+        case .inputMonitoringRequired: return "Permiso de Monitoreo de entrada requerido"
         case .error(let message): return message
         }
     }
@@ -396,7 +399,7 @@ final class DictationViewModel: ObservableObject {
     /// los casos ya hay suficiente detalle (feedback de grabación, spinner de transcripción,
     /// botón de copiar) como para no necesitar una segunda línea de texto.
     var primaryStateHint: String? {
-        primaryState == .ready ? "Presioná Fn + Espacio para dictar" : nil
+        primaryState == .ready ? "Mantené Fn presionado para dictar" : nil
     }
 
     /// Si corresponde destacar "Copiar" como acción principal del área central, en vez de un
@@ -491,12 +494,14 @@ final class DictationViewModel: ObservableObject {
         permissionStatusController.openMicrophonePrivacySettings()
     }
 
-    /// Abre la sección de privacidad de Accesibilidad en Ajustes del Sistema (donde se habilita
-    /// Scribe para que el atajo global de Fn + Espacio funcione). Si el deep link no resuelve en esta
-    /// versión de macOS, `NSWorkspace` simplemente no abre nada; no hay fallback porque no vale
-    /// la pena mantener dos textos de ayuda ligeramente distintos para ese caso borde.
-    func openAccessibilityPrivacySettings() {
-        permissionStatusController.openAccessibilityPrivacySettings()
+    /// Abre la sección de privacidad de Monitoreo de entrada en Ajustes del Sistema (donde se
+    /// habilita Scribe para que el atajo global de Fn funcione — ver `GlobalHotkeyService.swift`
+    /// para por qué este atajo pasó a depender de este permiso en vez de Accesibilidad). Si el
+    /// deep link no resuelve en esta versión de macOS, `NSWorkspace` simplemente no abre nada; no
+    /// hay fallback porque no vale la pena mantener dos textos de ayuda ligeramente distintos para
+    /// ese caso borde.
+    func openInputMonitoringPrivacySettings() {
+        permissionStatusController.openInputMonitoringPrivacySettings()
     }
 
     /// Vuelve a consultar el estado del atajo global sin reiniciar el servicio. Se llama al

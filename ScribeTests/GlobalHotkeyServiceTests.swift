@@ -6,12 +6,14 @@ import XCTest
 /// teclado real) y que `DictationViewModel` conecta el callback del atajo global con
 /// `handlePrimaryDictationAction(source: .globalHotkey)` sin duplicar el flujo de grabar/detener.
 ///
-/// Los casos que ejercitan `DictationViewModel` completo (atajo en modo toggle, Fn + Espacio)
-/// simulan la presión del atajo a través de
-/// `FakeGlobalHotkeyService.simulateHotkeyPressed()`, nunca con un evento real de teclado — eso es
-/// justamente lo que `LiveGlobalHotkeyService` traduce a esa llamada, y queda fuera del alcance de
-/// un test unitario. La lógica real de detección de `keyCode`/`.function`/`isARepeat` de
-/// `LiveGlobalHotkeyService.handleKeyDown` sí se cubre más abajo con eventos sintéticos.
+/// Los casos que ejercitan `DictationViewModel` completo (mantener Fn presionada, push-to-talk)
+/// simulan cada flanco del atajo a través de `FakeGlobalHotkeyService.simulateHotkeyPressed()`
+/// (una llamada por flanco: la primera equivale a presionar Fn, la segunda a soltarla),
+/// nunca con un evento real de teclado — eso es justamente lo que `LiveGlobalHotkeyService`
+/// traduce a esa llamada, y queda fuera del alcance de un test unitario. La lógica real de
+/// detección de flancos de `.function` y la máquina de estados de manos libres (doble toque para
+/// bloquear) de `LiveGlobalHotkeyService.handleFlagsChanged`/`PushToTalkState` sí se cubren más
+/// abajo con eventos sintéticos, sin instalar ningún `CGEventTap` real.
 @MainActor
 final class GlobalHotkeyServiceTests: XCTestCase {
     private func makeViewModel(
@@ -81,8 +83,9 @@ final class GlobalHotkeyServiceTests: XCTestCase {
         XCTAssertEqual(viewModel.state.session, .recording)
     }
 
-    /// Toggle: la segunda presión del atajo, con la grabación en curso, detiene y arranca la
-    /// transcripción — el mismo flujo que produce un segundo toque del botón de la UI.
+    /// Push-to-talk: el segundo flanco del atajo (soltar Fn), con la grabación en curso,
+    /// detiene y arranca la transcripción — el mismo flujo que produce un segundo toque del botón
+    /// de la UI.
     func testSecondGlobalHotkeyPressStopsRecordingAndTranscribes() async {
         let hotkeyService = FakeGlobalHotkeyService()
         let audioRecorder = FakeAudioRecordingService()
@@ -198,7 +201,7 @@ final class GlobalHotkeyServiceTests: XCTestCase {
         XCTAssertEqual(viewModel.state.session, .recording)
     }
 
-    // MARK: - Estado del atajo y permiso de Accesibilidad
+    // MARK: - Estado del atajo y permiso de Monitoreo de entrada
 
     func testHotkeyStatusReflectsActiveAfterInit() {
         let hotkeyService = FakeGlobalHotkeyService()
@@ -208,18 +211,18 @@ final class GlobalHotkeyServiceTests: XCTestCase {
         XCTAssertEqual(viewModel.hotkeyStatus, .active)
     }
 
-    /// El registro sigue instalando el monitor y solo el `AXIsProcessTrusted` falla;
-    /// eso no debe impedir que la app arranque ni tumbar `init`.
-    func testHotkeyStatusReflectsAccessibilityPermissionRequiredAfterInit() {
+    /// El registro sigue intentando crear el tap y solo falta el permiso de Monitoreo de
+    /// entrada; eso no debe impedir que la app arranque ni tumbar `init`.
+    func testHotkeyStatusReflectsInputMonitoringPermissionRequiredAfterInit() {
         let hotkeyService = FakeGlobalHotkeyService()
-        hotkeyService.startResult = .failure(GlobalHotkeyServiceError.accessibilityPermissionDenied)
-        hotkeyService.statusResult = .accessibilityPermissionRequired
+        hotkeyService.startResult = .failure(GlobalHotkeyServiceError.inputMonitoringPermissionDenied)
+        hotkeyService.statusResult = .inputMonitoringPermissionRequired
         let viewModel = makeViewModel(hotkeyService: hotkeyService)
 
-        XCTAssertEqual(viewModel.hotkeyStatus, .accessibilityPermissionRequired)
+        XCTAssertEqual(viewModel.hotkeyStatus, .inputMonitoringPermissionRequired)
     }
 
-    /// Una falla de registro no relacionada con Accesibilidad tampoco es fatal: el botón de la UI
+    /// Una falla de registro no relacionada con el permiso tampoco es fatal: el botón de la UI
     /// sigue grabando con normalidad.
     func testNonFatalRegistrationFailureDoesNotPreventNormalUse() async {
         let hotkeyService = FakeGlobalHotkeyService()
@@ -237,14 +240,14 @@ final class GlobalHotkeyServiceTests: XCTestCase {
         XCTAssertEqual(viewModel.state.session, .recording)
     }
 
-    /// Simula que el usuario otorgó el permiso de Accesibilidad después de que la app arrancó:
-    /// `refreshHotkeyStatus()` debe reflejarlo sin reiniciar el servicio.
+    /// Simula que el usuario otorgó el permiso de Monitoreo de entrada después de que la app
+    /// arrancó: `refreshHotkeyStatus()` debe reflejarlo sin reiniciar el servicio.
     func testRefreshHotkeyStatusUpdatesAfterPermissionGrantedLater() {
         let hotkeyService = FakeGlobalHotkeyService()
-        hotkeyService.startResult = .failure(GlobalHotkeyServiceError.accessibilityPermissionDenied)
-        hotkeyService.statusResult = .accessibilityPermissionRequired
+        hotkeyService.startResult = .failure(GlobalHotkeyServiceError.inputMonitoringPermissionDenied)
+        hotkeyService.statusResult = .inputMonitoringPermissionRequired
         let viewModel = makeViewModel(hotkeyService: hotkeyService)
-        XCTAssertEqual(viewModel.hotkeyStatus, .accessibilityPermissionRequired)
+        XCTAssertEqual(viewModel.hotkeyStatus, .inputMonitoringPermissionRequired)
 
         hotkeyService.statusResult = .active
         viewModel.refreshHotkeyStatus()
@@ -254,9 +257,9 @@ final class GlobalHotkeyServiceTests: XCTestCase {
 
     /// El fake sigue disparando el flujo centralizado sin importar el estado reportado por
     /// `currentStatus()` — esa distinción es solo para la UI, no cambia el cableado del atajo.
-    func testGlobalHotkeyStillUsesCentralizedWorkflowWhenAccessibilityPermissionIsRequired() async {
+    func testGlobalHotkeyStillUsesCentralizedWorkflowWhenInputMonitoringPermissionIsRequired() async {
         let hotkeyService = FakeGlobalHotkeyService()
-        hotkeyService.statusResult = .accessibilityPermissionRequired
+        hotkeyService.statusResult = .inputMonitoringPermissionRequired
         let audioRecorder = FakeAudioRecordingService()
         let viewModel = makeViewModel(hotkeyService: hotkeyService, audioRecorder: audioRecorder)
 
@@ -267,25 +270,27 @@ final class GlobalHotkeyServiceTests: XCTestCase {
         XCTAssertEqual(viewModel.state.session, .recording)
     }
 
-    /// `LiveGlobalHotkeyService.currentStatus()` antes de `start` no depende de Accesibilidad:
-    /// no hay callback ni monitor instalado todavía, así que siempre es `.unknown`.
+    /// `LiveGlobalHotkeyService.currentStatus()` antes de `start` no depende del permiso de
+    /// Monitoreo de entrada: no hay callback ni tap instalado todavía, así que siempre es
+    /// `.unknown`.
     func testLiveServiceStatusIsUnknownBeforeStart() {
         let service = LiveGlobalHotkeyService()
         XCTAssertEqual(service.currentStatus(), .unknown)
     }
 
-    /// Después de `start`, el estado real depende del permiso de Accesibilidad de esta máquina
-    /// (no controlable en CI), así que solo se verifica que deje de ser `.unknown`/`.failed` —
-    /// sin asumir si el proceso está o no confiado.
+    /// Después de `start`, el estado real depende del permiso de Monitoreo de entrada de esta
+    /// máquina (no controlable en CI, y `CGEvent.tapCreate` directamente no crea el tap si falta),
+    /// así que solo se verifica que deje de ser `.unknown`/`.failed` — sin asumir si el proceso
+    /// está o no habilitado.
     func testLiveServiceStatusIsActiveOrPermissionRequiredAfterStart() {
         let service = LiveGlobalHotkeyService()
         try? service.start {}
 
         switch service.currentStatus() {
-        case .active, .accessibilityPermissionRequired:
+        case .active, .inputMonitoringPermissionRequired:
             break
         case .unknown, .failed:
-            XCTFail("Se esperaba .active o .accessibilityPermissionRequired después de start, se obtuvo \(service.currentStatus())")
+            XCTFail("Se esperaba .active o .inputMonitoringPermissionRequired después de start, se obtuvo \(service.currentStatus())")
         }
     }
 
@@ -300,201 +305,284 @@ final class GlobalHotkeyServiceTests: XCTestCase {
     }
 
     // Estos tests ejercitan la lógica real de detección con eventos sintéticos construidos vía
-    // `NSEvent.keyEvent`, sin depender de un teclado real ni de un monitor global entregando
-    // eventos del sistema. `handleKeyDown` dispara el callback con `Task { @MainActor in ... }`,
-    // así que cada aserción positiva espera brevemente antes de verificar.
+    // `NSEvent.keyEvent`, sin depender de un teclado real ni de un `CGEventTap` real entregando
+    // eventos del sistema. Las transiciones diferidas (el detenimiento tras soltar, ver "Modo
+    // manos libres" más abajo) disparan el callback con `Task { @MainActor in ... }`, así que
+    // cada aserción positiva espera brevemente antes de verificar.
 
-    private func makeKeyDownEvent(
-        keyCode: UInt16,
-        modifierFlags: NSEvent.ModifierFlags,
-        isARepeat: Bool = false
-    ) -> NSEvent {
+    private func makeFlagsChangedEvent(modifierFlags: NSEvent.ModifierFlags) -> NSEvent {
         NSEvent.keyEvent(
-            with: .keyDown,
+            with: .flagsChanged,
             location: .zero,
             modifierFlags: modifierFlags,
             timestamp: 0,
             windowNumber: 0,
             context: nil,
-            characters: " ",
-            charactersIgnoringModifiers: " ",
-            isARepeat: isARepeat,
-            keyCode: keyCode
+            characters: "",
+            charactersIgnoringModifiers: "",
+            isARepeat: false,
+            keyCode: 63 // kVK_Function; irrelevant para la lógica, que solo mira modifierFlags.
         )!
     }
 
-    // MARK: - HotkeyTrigger (combo configurable, fallback si Fn + Espacio no fuera fiable)
+    // MARK: - HotkeyModifierTrigger (modificador configurable, fallback si Fn no fuera viable)
 
-    func testFnSpaceTriggerMatchesFnPlusSpace() {
-        let event = makeKeyDownEvent(keyCode: HotkeyTrigger.fnSpace.keyCode, modifierFlags: .function)
-        XCTAssertTrue(HotkeyTrigger.fnSpace.matches(event))
+    func testFunctionTriggerIsActiveWhenFunctionFlagPresent() {
+        XCTAssertTrue(HotkeyModifierTrigger.function.isActive(in: .function))
     }
 
-    func testFnSpaceTriggerDoesNotMatchADifferentKeyCode() {
-        let event = makeKeyDownEvent(keyCode: 0, modifierFlags: .function)
-        XCTAssertFalse(HotkeyTrigger.fnSpace.matches(event))
+    func testFunctionTriggerIsNotActiveWithoutFunctionFlag() {
+        XCTAssertFalse(HotkeyModifierTrigger.function.isActive(in: .option))
     }
 
-    func testFnSpaceTriggerDoesNotMatchADifferentModifier() {
-        let event = makeKeyDownEvent(keyCode: HotkeyTrigger.fnSpace.keyCode, modifierFlags: .option)
-        XCTAssertFalse(HotkeyTrigger.fnSpace.matches(event))
+    func testControlTriggerIsActiveWhenControlFlagPresent() {
+        XCTAssertTrue(HotkeyModifierTrigger.control.isActive(in: .control))
     }
 
-    /// `LiveGlobalHotkeyService` no tiene el combo de Fn + Espacio hardcodeado en su lógica de
-    /// detección: instanciarlo con otro `HotkeyTrigger` (por ejemplo, un fallback para un teclado
-    /// donde la validación de QA confirme que Fn + Espacio no es fiable) alcanza para cambiar qué
-    /// evento dispara el atajo, sin tocar `handleKeyDown` ni el modelo de permisos.
+    func testControlTriggerIsNotActiveWithoutControlFlag() {
+        XCTAssertFalse(HotkeyModifierTrigger.control.isActive(in: .option))
+    }
+
+    /// Documenta el compromiso conocido (ver DECISIONS.md): Control sigue disparando el atajo aun
+    /// combinado con otros modificadores, como en Ctrl+Shift+algo. `HotkeyModifierTrigger.control`
+    /// ya no es el default, pero sigue siendo un fallback válido (ver
+    /// `HotkeyModifierTrigger` en `GlobalHotkeyService.swift`).
+    func testControlTriggerIsActiveEvenCombinedWithOtherModifiers() {
+        XCTAssertTrue(HotkeyModifierTrigger.control.isActive(in: [.control, .shift]))
+    }
+
+    /// `LiveGlobalHotkeyService` no tiene Fn hardcodeada en su lógica de detección:
+    /// instanciarlo con otro `HotkeyModifierTrigger` (por ejemplo, un fallback para un teclado o
+    /// flujo de trabajo donde la validación confirme que Fn no es viable) alcanza para
+    /// cambiar qué modificador dispara el atajo, sin tocar `handleFlagsChanged` ni el modelo de
+    /// permisos.
     func testCustomTriggerIsHonoredInsteadOfTheDefault() async {
-        let fallback = HotkeyTrigger(keyCode: 96, requiredModifierFlags: .control)
+        let fallback = HotkeyModifierTrigger(modifierFlag: .option)
         let service = LiveGlobalHotkeyService(trigger: fallback)
         var pressCount = 0
         try? service.start { pressCount += 1 }
 
-        // El combo por defecto (Fn + Espacio) ya no dispara nada con este trigger inyectado.
-        service.handleKeyDown(
-            makeKeyDownEvent(keyCode: HotkeyTrigger.fnSpace.keyCode, modifierFlags: .function)
-        )
+        // El modificador por defecto (Fn) ya no dispara nada con este trigger inyectado.
+        service.handleFlagsChanged(makeFlagsChangedEvent(modifierFlags: .function))
         try? await Task.sleep(for: .milliseconds(50))
         XCTAssertEqual(pressCount, 0)
 
-        service.handleKeyDown(makeKeyDownEvent(keyCode: 96, modifierFlags: .control))
+        service.handleFlagsChanged(makeFlagsChangedEvent(modifierFlags: .option))
         try? await Task.sleep(for: .milliseconds(50))
         XCTAssertEqual(pressCount, 1)
     }
 
-    // MARK: - Detección real de Fn + Espacio (LiveGlobalHotkeyService.handleKeyDown)
+    // MARK: - Detección real de Fn (LiveGlobalHotkeyService.handleFlagsChanged)
 
-    func testHandleKeyDownFiresOnFnSpace() async {
+    func testHandleFlagsChangedFiresWhenFunctionGoesDown() async {
         let service = LiveGlobalHotkeyService()
         var pressCount = 0
         try? service.start { pressCount += 1 }
 
-        service.handleKeyDown(
-            makeKeyDownEvent(keyCode: HotkeyTrigger.fnSpace.keyCode, modifierFlags: .function)
-        )
-        try? await Task.sleep(for: .milliseconds(50))
-
-        XCTAssertEqual(pressCount, 1)
-    }
-
-    /// Space sola (sin Fn) no debe disparar el atajo: si lo hiciera, escribir un espacio normal
-    /// en cualquier app activaría la grabación.
-    func testHandleKeyDownDoesNotFireForSpaceAlone() async {
-        let service = LiveGlobalHotkeyService()
-        var pressed = false
-        try? service.start { pressed = true }
-
-        service.handleKeyDown(makeKeyDownEvent(keyCode: HotkeyTrigger.fnSpace.keyCode, modifierFlags: []))
-        try? await Task.sleep(for: .milliseconds(50))
-
-        XCTAssertFalse(pressed)
-    }
-
-    /// Fn sola (con cualquier otra tecla, no Space) no debe disparar el atajo.
-    func testHandleKeyDownDoesNotFireForFnWithOtherKey() async {
-        let service = LiveGlobalHotkeyService()
-        var pressed = false
-        try? service.start { pressed = true }
-
-        // keyCode 0 == "a" en el layout físico ANSI.
-        service.handleKeyDown(makeKeyDownEvent(keyCode: 0, modifierFlags: .function))
-        try? await Task.sleep(for: .milliseconds(50))
-
-        XCTAssertFalse(pressed)
-    }
-
-    /// Option + Espacio (el atajo viejo, con otro modificador) no debe disparar el atajo nuevo:
-    /// confirma que la migración no dejó ninguna ruta que siga reaccionando a Option.
-    func testHandleKeyDownDoesNotFireForOptionSpace() async {
-        let service = LiveGlobalHotkeyService()
-        var pressed = false
-        try? service.start { pressed = true }
-
-        service.handleKeyDown(makeKeyDownEvent(keyCode: HotkeyTrigger.fnSpace.keyCode, modifierFlags: .option))
-        try? await Task.sleep(for: .milliseconds(50))
-
-        XCTAssertFalse(pressed)
-    }
-
-    /// Mantener Fn + Espacio presionado genera `keyDown` repetidos (`isARepeat == true`) que no
-    /// deben volver a disparar el atajo — solo el `keyDown` inicial cuenta como una presión.
-    func testHandleKeyDownIgnoresRepeatsWhileHeld() async {
-        let service = LiveGlobalHotkeyService()
-        var pressCount = 0
-        try? service.start { pressCount += 1 }
-
-        service.handleKeyDown(
-            makeKeyDownEvent(keyCode: HotkeyTrigger.fnSpace.keyCode, modifierFlags: .function, isARepeat: false)
-        )
-        service.handleKeyDown(
-            makeKeyDownEvent(keyCode: HotkeyTrigger.fnSpace.keyCode, modifierFlags: .function, isARepeat: true)
-        )
-        service.handleKeyDown(
-            makeKeyDownEvent(keyCode: HotkeyTrigger.fnSpace.keyCode, modifierFlags: .function, isARepeat: true)
-        )
+        service.handleFlagsChanged(makeFlagsChangedEvent(modifierFlags: .function))
         try? await Task.sleep(for: .milliseconds(50))
 
         XCTAssertEqual(pressCount, 1)
     }
 
-    // MARK: - Monitor local (Scribe en foreground)
+    /// El mismo callback dispara de nuevo cuando Fn se suelta — lo que convierte al atajo en
+    /// push-to-talk — pero ya no en el instante exacto de soltar: espera `doubleTapWindow` por si
+    /// llega un segundo toque (ver "Modo manos libres" más abajo) antes de asumir que fue un
+    /// mantener-presionado normal. Usa un `doubleTapWindow` corto inyectado en vez del real
+    /// (`NSEvent.doubleClickInterval`, unos cientos de milisegundos) para no depender de esperas
+    /// largas en el test.
+    func testHandleFlagsChangedFiresAgainWhenFunctionGoesUpAfterDoubleTapWindowElapses() async {
+        let service = LiveGlobalHotkeyService(doubleTapWindow: 0.02)
+        var pressCount = 0
+        try? service.start { pressCount += 1 }
 
-    /// `handleLocalKeyDown` es lo que el monitor local invoca por cada evento mientras Scribe es
-    /// la app activa: debe disparar el atajo con la misma lógica que el monitor global.
-    func testHandleLocalKeyDownFiresOnFnSpace() async {
+        service.handleFlagsChanged(makeFlagsChangedEvent(modifierFlags: .function))
+        try? await Task.sleep(for: .milliseconds(10))
+        service.handleFlagsChanged(makeFlagsChangedEvent(modifierFlags: []))
+        try? await Task.sleep(for: .milliseconds(60))
+
+        XCTAssertEqual(pressCount, 2)
+    }
+
+    /// Otro modificador (Shift) cambiando mientras Fn sigue presionada no debe disparar el
+    /// atajo de nuevo: solo importa el flanco de Fn, no cualquier cambio en `modifierFlags`. No
+    /// hay flanco de soltada acá, así que `doubleTapWindow` no entra en juego.
+    func testHandleFlagsChangedDoesNotFireAgainWhileFunctionStaysDownAndAnotherModifierChanges() async {
         let service = LiveGlobalHotkeyService()
         var pressCount = 0
         try? service.start { pressCount += 1 }
 
-        _ = service.handleLocalKeyDown(
-            makeKeyDownEvent(keyCode: HotkeyTrigger.fnSpace.keyCode, modifierFlags: .function)
-        )
+        service.handleFlagsChanged(makeFlagsChangedEvent(modifierFlags: .function))
+        try? await Task.sleep(for: .milliseconds(50))
+        service.handleFlagsChanged(makeFlagsChangedEvent(modifierFlags: [.function, .shift]))
         try? await Task.sleep(for: .milliseconds(50))
 
         XCTAssertEqual(pressCount, 1)
     }
 
-    /// El monitor local nunca debe tragarse el evento: si lo hiciera, escribir un espacio normal
-    /// dentro de Scribe (p. ej. en el editor de la transcripción) dejaría de funcionar.
-    func testHandleLocalKeyDownReturnsEventUnchanged() {
-        let service = LiveGlobalHotkeyService()
-        try? service.start {}
-        let event = makeKeyDownEvent(keyCode: HotkeyTrigger.fnSpace.keyCode, modifierFlags: [])
-
-        let returned = service.handleLocalKeyDown(event)
-
-        XCTAssertTrue(returned === event)
-    }
-
-    /// Igual que con el monitor global: Space sin Fn no dispara el atajo local.
-    func testHandleLocalKeyDownDoesNotFireForSpaceAlone() async {
+    /// Option sola (sin Fn) no debe disparar el atajo por defecto.
+    func testHandleFlagsChangedDoesNotFireForOptionAlone() async {
         let service = LiveGlobalHotkeyService()
         var pressed = false
         try? service.start { pressed = true }
 
-        _ = service.handleLocalKeyDown(makeKeyDownEvent(keyCode: HotkeyTrigger.fnSpace.keyCode, modifierFlags: []))
+        service.handleFlagsChanged(makeFlagsChangedEvent(modifierFlags: .option))
         try? await Task.sleep(for: .milliseconds(50))
 
         XCTAssertFalse(pressed)
     }
 
-    /// `start()` instala tanto el monitor global como el local; `stop()` deja el estado en
-    /// `.unknown` de nuevo, igual que antes de llamar a `start` — cubre que ambos monitores se
-    /// liberan (si solo se liberara uno, `currentStatus()` seguiría reportando `.unknown` igual
-    /// gracias a `hasStarted`, pero un monitor local huérfano seguiría entregando eventos al
-    /// callback ya limpiado; por eso `handleKeyDown` no dispara nada tras `stop()`).
-    func testStopClearsBothMonitorsSoHandleKeyDownNoLongerFires() async {
+    /// Regression guard: Control ya no es el modificador por defecto, así que sostenerlo solo no
+    /// debe disparar el atajo (a diferencia de la migración anterior a esta).
+    func testHandleFlagsChangedDoesNotFireForControlAlone() async {
+        let service = LiveGlobalHotkeyService()
+        var pressed = false
+        try? service.start { pressed = true }
+
+        service.handleFlagsChanged(makeFlagsChangedEvent(modifierFlags: .control))
+        try? await Task.sleep(for: .milliseconds(50))
+
+        XCTAssertFalse(pressed)
+    }
+
+    // MARK: - stop() limpia el estado (ya no hay un segundo monitor local que verificar)
+
+    /// A diferencia de la migración anterior (que instalaba un monitor global y uno local), este
+    /// servicio ya no tiene un segundo mecanismo de entrega que verificar por separado: solo
+    /// existe el `CGEventTap` y el estado interno que `handleFlagsChanged` consulta directamente.
+    /// Este test cubre ese estado interno: después de `stop()`, un flanco posterior no debe
+    /// disparar el callback ya limpiado, y `currentStatus()` vuelve a `.unknown`.
+    func testStopClearsStateSoHandleFlagsChangedNoLongerFiresTheOldCallback() async {
         let service = LiveGlobalHotkeyService()
         var pressCount = 0
         try? service.start { pressCount += 1 }
+
+        service.handleFlagsChanged(makeFlagsChangedEvent(modifierFlags: .function))
+        try? await Task.sleep(for: .milliseconds(50))
+        XCTAssertEqual(pressCount, 1)
 
         service.stop()
-        service.handleKeyDown(
-            makeKeyDownEvent(keyCode: HotkeyTrigger.fnSpace.keyCode, modifierFlags: .function)
-        )
+        service.handleFlagsChanged(makeFlagsChangedEvent(modifierFlags: .function))
         try? await Task.sleep(for: .milliseconds(50))
 
-        XCTAssertEqual(pressCount, 0)
+        XCTAssertEqual(pressCount, 1)
         XCTAssertEqual(service.currentStatus(), .unknown)
+    }
+
+    /// `handleTapEvent` reactiva el tap cuando macOS lo deshabilita por timeout o intervención del
+    /// usuario, y siempre deja pasar ese evento de control sin tocarlo — nunca lo consume, porque
+    /// no representa un flanco de `trigger`.
+    func testHandleTapEventPassesThroughControlEventsAfterReEnablingTheTap() {
+        let service = LiveGlobalHotkeyService()
+        let controlEvent = CGEvent(source: nil)!
+
+        let resultAfterTimeout = service.handleTapEvent(type: .tapDisabledByTimeout, event: controlEvent)
+        let resultAfterUserInput = service.handleTapEvent(type: .tapDisabledByUserInput, event: controlEvent)
+
+        XCTAssertNotNil(resultAfterTimeout)
+        XCTAssertNotNil(resultAfterUserInput)
+    }
+
+    // MARK: - Modo manos libres (doble toque para bloquear grabando)
+
+    /// Un mantener-presionado normal (una sola presión y suelta, sin un segundo toque dentro de
+    /// `doubleTapWindow`) sigue funcionando como push-to-talk de siempre: arranca al presionar,
+    /// se detiene solo — mediante el `pendingStopTask` diferido de `handleTriggerUp` — una vez que
+    /// vence la ventana sin un segundo toque.
+    func testNormalPressAndReleaseStopsAfterDoubleTapWindowElapsesWithNoSecondPress() async {
+        let service = LiveGlobalHotkeyService(doubleTapWindow: 0.03)
+        var pressCount = 0
+        try? service.start { pressCount += 1 }
+
+        service.handleFlagsChanged(makeFlagsChangedEvent(modifierFlags: .function))
+        try? await Task.sleep(for: .milliseconds(10))
+        XCTAssertEqual(pressCount, 1)
+        XCTAssertEqual(service.pushToTalkState, .recording)
+
+        service.handleFlagsChanged(makeFlagsChangedEvent(modifierFlags: []))
+        try? await Task.sleep(for: .milliseconds(10))
+        XCTAssertEqual(pressCount, 1, "no debe detener todavía: sigue dentro de doubleTapWindow")
+
+        try? await Task.sleep(for: .milliseconds(60))
+        XCTAssertEqual(pressCount, 2)
+        XCTAssertEqual(service.pushToTalkState, .idle)
+    }
+
+    /// El caso central del modo manos libres: presionar, soltar, y volver a presionar dentro de
+    /// `doubleTapWindow` bloquea la grabación en curso en vez de iniciar una segunda — el
+    /// callback no vuelve a dispararse (`DictationViewModel` ya sabe que está grabando desde el
+    /// primer toque) — y soltar la segunda vez, ya bloqueado, tampoco la detiene.
+    func testDoubleTapWithinWindowLocksRecordingWithoutStoppingOnRelease() async {
+        let service = LiveGlobalHotkeyService(doubleTapWindow: 0.05)
+        var pressCount = 0
+        try? service.start { pressCount += 1 }
+
+        service.handleFlagsChanged(makeFlagsChangedEvent(modifierFlags: .function)) // 1er toque: abajo
+        try? await Task.sleep(for: .milliseconds(5))
+        service.handleFlagsChanged(makeFlagsChangedEvent(modifierFlags: [])) // 1er toque: arriba
+        try? await Task.sleep(for: .milliseconds(5))
+        service.handleFlagsChanged(makeFlagsChangedEvent(modifierFlags: .function)) // 2do toque, dentro de la ventana
+        try? await Task.sleep(for: .milliseconds(5))
+
+        XCTAssertEqual(pressCount, 1, "el doble toque no debe emitir un segundo callback: ya se está grabando")
+        XCTAssertEqual(service.pushToTalkState, .locked)
+
+        service.handleFlagsChanged(makeFlagsChangedEvent(modifierFlags: [])) // 2do toque: arriba, ya bloqueado
+        try? await Task.sleep(for: .milliseconds(80)) // más que doubleTapWindow
+
+        XCTAssertEqual(pressCount, 1, "bloqueado: soltar no debe detener la grabación aunque pase el tiempo del doble toque")
+        XCTAssertEqual(service.pushToTalkState, .locked)
+    }
+
+    /// Estando bloqueado, un toque simple posterior detiene la grabación en el flanco de bajada
+    /// mismo (no hace falta soltar) y no queda ningún detenimiento diferido pendiente que dispare
+    /// un tercer callback espurio cuando esa soltada llegue después.
+    func testSingleTapWhileLockedStopsRecordingWithoutAStrayLaterCallback() async {
+        let service = LiveGlobalHotkeyService(doubleTapWindow: 0.05)
+        var pressCount = 0
+        try? service.start { pressCount += 1 }
+
+        service.handleFlagsChanged(makeFlagsChangedEvent(modifierFlags: .function))
+        try? await Task.sleep(for: .milliseconds(5))
+        service.handleFlagsChanged(makeFlagsChangedEvent(modifierFlags: []))
+        try? await Task.sleep(for: .milliseconds(5))
+        service.handleFlagsChanged(makeFlagsChangedEvent(modifierFlags: .function))
+        try? await Task.sleep(for: .milliseconds(5))
+        XCTAssertEqual(service.pushToTalkState, .locked)
+
+        service.handleFlagsChanged(makeFlagsChangedEvent(modifierFlags: .function))
+        try? await Task.sleep(for: .milliseconds(5))
+        XCTAssertEqual(pressCount, 2, "el toque simple debe detener de inmediato, en el flanco de bajada")
+        XCTAssertEqual(service.pushToTalkState, .idle)
+
+        service.handleFlagsChanged(makeFlagsChangedEvent(modifierFlags: []))
+        try? await Task.sleep(for: .milliseconds(80))
+
+        XCTAssertEqual(pressCount, 2, "la soltada del toque que detiene no debe disparar un tercer callback")
+        XCTAssertEqual(service.pushToTalkState, .idle)
+    }
+
+    /// Guarda de regresión para el bug detectado durante el diseño: un segundo toque que llega
+    /// *después* de que ya venció `doubleTapWindow` (y por lo tanto el detenimiento diferido ya
+    /// disparó solo) no debe tratarse como parte de ningún doble toque — es una presión nueva e
+    /// independiente, que arranca su propia grabación.
+    func testSecondPressAfterWindowElapsedStartsANewIndependentRecording() async {
+        let service = LiveGlobalHotkeyService(doubleTapWindow: 0.02)
+        var pressCount = 0
+        try? service.start { pressCount += 1 }
+
+        service.handleFlagsChanged(makeFlagsChangedEvent(modifierFlags: .function))
+        try? await Task.sleep(for: .milliseconds(5))
+        service.handleFlagsChanged(makeFlagsChangedEvent(modifierFlags: []))
+        try? await Task.sleep(for: .milliseconds(60)) // deja vencer doubleTapWindow: se detiene solo
+
+        XCTAssertEqual(pressCount, 2)
+        XCTAssertEqual(service.pushToTalkState, .idle)
+
+        service.handleFlagsChanged(makeFlagsChangedEvent(modifierFlags: .function))
+        try? await Task.sleep(for: .milliseconds(5))
+
+        XCTAssertEqual(pressCount, 3)
+        XCTAssertEqual(service.pushToTalkState, .recording)
     }
 }

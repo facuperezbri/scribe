@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Estado del atajo global de Fn + Espacio, presentado de
+/// Estado del atajo global de Fn (mantener presionada), presentado de
 /// forma subordinada al resto de la UI — mismo lugar y estilo que
 /// `ModelStatusView`/`PrivacyNoteView`, no un banner que compita con el flujo principal de
 /// grabar/detener.
@@ -18,23 +18,23 @@ struct HotkeyStatusView: View {
                 Image(systemName: "keyboard")
                     .foregroundStyle(.secondary)
                     .accessibilityHidden(true)
-                Text("Fn + Espacio para grabar/detener")
+                Text("Mantené Fn para grabar")
             }
             .font(.caption2)
             .foregroundStyle(.secondary)
-        case .accessibilityPermissionRequired:
+        case .inputMonitoringPermissionRequired:
             VStack(spacing: 4) {
                 HStack(spacing: 6) {
                     Image(systemName: "keyboard.badge.exclamationmark")
                         .foregroundStyle(.orange)
                         .accessibilityHidden(true)
-                    Text("Para usar Fn + Espacio desde cualquier app, Scribe necesita permiso de Accesibilidad.")
+                    Text("Para usar Fn desde cualquier app, Scribe necesita permiso de Monitoreo de entrada.")
                         .multilineTextAlignment(.center)
                 }
                 .font(.caption)
                 .foregroundStyle(.secondary)
 
-                Text("Activá Scribe en Ajustes del Sistema > Privacidad y seguridad > Accesibilidad.")
+                Text("Activá Scribe en Ajustes del Sistema > Privacidad y seguridad > Monitoreo de entrada.")
                     .font(.caption2)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)

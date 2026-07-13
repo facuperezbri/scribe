@@ -85,6 +85,7 @@ final class AutoPasteServiceTests: XCTestCase {
         var restoreCallCount = 0
         var lastRestoredText: String?
         var changeCount = 0
+        var lastWrittenText: String?
     }
 
     private func makeService(
@@ -95,6 +96,7 @@ final class AutoPasteServiceTests: XCTestCase {
         pasteboardWriteSucceeds: Bool = true,
         keystrokeSucceeds: Bool = true,
         externalClipboardChangeAfterOurWrite: Bool = false,
+        needsLeadingSpace: Bool = false,
         spies: PasteSpies
     ) -> LiveAutoPasteService {
         LiveAutoPasteService(
@@ -106,8 +108,9 @@ final class AutoPasteServiceTests: XCTestCase {
                 spies.readPasteboardCallCount += 1
                 return previousClipboardText
             },
-            writeToPasteboard: { _ in
+            writeToPasteboard: { text in
                 spies.pasteboardWriteCallCount += 1
+                spies.lastWrittenText = text
                 if pasteboardWriteSucceeds { spies.changeCount += 1 }
                 return pasteboardWriteSucceeds
             },
@@ -121,7 +124,8 @@ final class AutoPasteServiceTests: XCTestCase {
                 spies.keystrokeCallCount += 1
                 if externalClipboardChangeAfterOurWrite { spies.changeCount += 1 }
                 return keystrokeSucceeds
-            }
+            },
+            focusedTextNeedsLeadingSpace: { needsLeadingSpace }
         )
     }
 
@@ -213,6 +217,65 @@ final class AutoPasteServiceTests: XCTestCase {
         XCTAssertEqual(spies.activateCallCount, 0)
         XCTAssertEqual(spies.keystrokeCallCount, 1)
         XCTAssertEqual(spies.restoreCallCount, 1)
+    }
+
+    /// Dos dictados consecutivos sobre el mismo campo: si el cursor quedó justo después de una
+    /// palabra (p. ej. tras el auto-paste anterior), el nuevo texto debe llegar con un espacio
+    /// adelante para no pegarse a la palabra previa.
+    func testPasteAddsALeadingSpaceWhenTheFocusedFieldNeedsOne() async {
+        let spies = PasteSpies()
+        let target = AutoPasteTarget.fake()
+        let service = makeService(frontmostApplication: target.runningApplication, needsLeadingSpace: true, spies: spies)
+
+        let result = await service.paste(text: "hola", target: target)
+
+        XCTAssertEqual(result, .pasted)
+        XCTAssertEqual(spies.lastWrittenText, " hola")
+    }
+
+    /// Camino feliz sin necesidad de separador: el cursor está al principio del campo, o justo
+    /// después de un espacio en blanco, así que el texto se pega sin modificar.
+    func testPasteDoesNotAddALeadingSpaceWhenTheFocusedFieldDoesNotNeedOne() async {
+        let spies = PasteSpies()
+        let target = AutoPasteTarget.fake()
+        let service = makeService(frontmostApplication: target.runningApplication, needsLeadingSpace: false, spies: spies)
+
+        let result = await service.paste(text: "hola", target: target)
+
+        XCTAssertEqual(result, .pasted)
+        XCTAssertEqual(spies.lastWrittenText, "hola")
+    }
+
+    /// El caso real reportado: dos dictados seguidos sobre el mismo campo. La detección por
+    /// Accesibilidad (`needsLeadingSpace`) puede fallar según el toolkit del destino, así que la
+    /// señal que debe bastar por sí sola es "el último auto-paste exitoso fue sobre este mismo
+    /// destino" — sin necesitar que `needsLeadingSpace` acierte.
+    func testPasteAddsALeadingSpaceWhenContinuingOnTheSameTargetAsTheLastSuccessfulPaste() async {
+        let spies = PasteSpies()
+        let target = AutoPasteTarget.fake()
+        let service = makeService(frontmostApplication: target.runningApplication, needsLeadingSpace: false, spies: spies)
+
+        let firstResult = await service.paste(text: "hola", target: target)
+        let secondResult = await service.paste(text: "mundo", target: target)
+
+        XCTAssertEqual(firstResult, .pasted)
+        XCTAssertEqual(secondResult, .pasted)
+        XCTAssertEqual(spies.lastWrittenText, " mundo")
+    }
+
+    /// Un nuevo dictado sobre un destino distinto del último pegado con éxito no debe heredar el
+    /// espacio: no hay ninguna razón para asumir que continúa el texto de otra app.
+    func testPasteDoesNotAddALeadingSpaceWhenTheTargetDiffersFromTheLastSuccessfulPaste() async {
+        let spies = PasteSpies()
+        let firstTarget = AutoPasteTarget.fake()
+        let secondTarget = AutoPasteTarget.fake(processIdentifier: 999_999)
+        let service = makeService(frontmostApplication: firstTarget.runningApplication, needsLeadingSpace: false, spies: spies)
+
+        _ = await service.paste(text: "hola", target: firstTarget)
+        let secondResult = await service.paste(text: "mundo", target: secondTarget)
+
+        XCTAssertEqual(secondResult, .pasted)
+        XCTAssertEqual(spies.lastWrittenText, "mundo")
     }
 
     /// El usuario cambió de foco durante la transcripción: hay que reactivar el destino capturado

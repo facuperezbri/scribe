@@ -14,7 +14,7 @@ struct MenuBarStatusIcon: View {
             return "mic.fill"
         case .transcribing, .startingRecording, .stoppingRecording, .requestingPermission:
             return "ellipsis.circle"
-        case .microphoneDenied, .missingModel, .accessibilityRequired, .error:
+        case .microphoneDenied, .missingModel, .inputMonitoringRequired, .error:
             return "exclamationmark.circle"
         case .downloadingModel:
             return "arrow.down.circle"
@@ -74,8 +74,8 @@ struct MenuBarContentView: View {
             Button("Permiso de Micrófono...", action: viewModel.openMicrophonePrivacySettings)
         }
 
-        if viewModel.hotkeyStatus == .accessibilityPermissionRequired {
-            Button("Permiso de Accesibilidad...", action: viewModel.openAccessibilityPrivacySettings)
+        if viewModel.hotkeyStatus == .inputMonitoringPermissionRequired {
+            Button("Permiso de Monitoreo de entrada...", action: viewModel.openInputMonitoringPrivacySettings)
         }
 
         Divider()

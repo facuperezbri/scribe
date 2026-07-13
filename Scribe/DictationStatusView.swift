@@ -32,7 +32,7 @@ struct DictationStatusView: View {
         case .transcribing: return "text.bubble"
         case .microphoneDenied: return "mic.slash"
         case .missingModel, .downloadingModel: return "arrow.down.circle"
-        case .accessibilityRequired: return "keyboard.badge.exclamationmark"
+        case .inputMonitoringRequired: return "keyboard.badge.exclamationmark"
         case .error: return "exclamationmark.triangle"
         }
     }
@@ -43,7 +43,7 @@ struct DictationStatusView: View {
         case .startingRecording, .requestingPermission, .stoppingRecording, .transcribing, .downloadingModel:
             return .blue
         case .recording: return .red
-        case .missingModel, .accessibilityRequired: return .orange
+        case .missingModel, .inputMonitoringRequired: return .orange
         case .microphoneDenied, .error: return .red
         }
     }
@@ -115,7 +115,7 @@ struct DictationStatusView: View {
         DictationStatusView(
             primaryState: .ready,
             title: "Listo para dictar",
-            hint: "Presioná Fn + Espacio para dictar",
+            hint: "Mantené Fn presionado para dictar",
             elapsed: 0,
             inputLevel: 0,
             warningText: nil,

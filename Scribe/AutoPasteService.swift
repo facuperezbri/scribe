@@ -68,7 +68,7 @@ protocol AutoPasteServicing {
 /// Accesibilidad, campo seguro, portapapeles, reactivación, evento de teclado) están detrás de
 /// parámetros inyectables — no por flexibilidad especulativa, sino porque ninguno de ellos se puede
 /// controlar ni se debe disparar de verdad desde un test unitario (el mismo motivo por el que
-/// `HotkeyTrigger`/`frontmostApplicationProvider` ya son inyectables en este archivo).
+/// `HotkeyModifierTrigger`/`frontmostApplicationProvider` ya son inyectables en este archivo).
 ///
 /// Restaura el contenido previo del portapapeles después de pegar (Fase 5), salvo que algo más
 /// lo haya escrito en el ínterin (típicamente, el usuario copiando algo nuevo mientras Scribe
@@ -89,8 +89,7 @@ final class LiveAutoPasteService: AutoPasteServicing {
     /// de que Scribe lo pise con el contenido previo. Misma naturaleza heurística que
     /// `reactivationDelay` — ver checklist de QA manual.
     private static let clipboardRestoreDelay: Duration = .milliseconds(200)
-    /// `kVK_ANSI_V`, sin importar `Carbon.HIToolbox` solo por esta constante — mismo criterio que
-    /// `HotkeyTrigger.fnSpace` (keyCode 49) en `GlobalHotkeyService.swift`.
+    /// `kVK_ANSI_V`, sin importar `Carbon.HIToolbox` solo por esta constante.
     private static let pasteKeyCode: CGKeyCode = 9
 
     private let frontmostApplicationProvider: () -> NSRunningApplication?
@@ -103,6 +102,10 @@ final class LiveAutoPasteService: AutoPasteServicing {
     private let restorePasteboardString: (String?) -> Void
     private let activateTarget: (NSRunningApplication) -> Void
     private let postPasteKeystroke: () -> Bool
+    private let focusedTextNeedsLeadingSpace: () -> Bool
+    /// Destino del último auto-paste que efectivamente llegó a pegarse (`.pasted`), para saber si
+    /// el próximo dictado continúa sobre el mismo campo — ver comentario en `paste(text:target:)`.
+    private var lastPastedTarget: AutoPasteTarget?
 
     init(
         frontmostApplicationProvider: @escaping () -> NSRunningApplication? = { NSWorkspace.shared.frontmostApplication },
@@ -114,7 +117,8 @@ final class LiveAutoPasteService: AutoPasteServicing {
         pasteboardChangeCount: @escaping () -> Int = LiveAutoPasteService.generalPasteboardChangeCount,
         restorePasteboardString: @escaping (String?) -> Void = LiveAutoPasteService.restoreGeneralPasteboardString,
         activateTarget: @escaping (NSRunningApplication) -> Void = { $0.activate() },
-        postPasteKeystroke: @escaping () -> Bool = LiveAutoPasteService.postCommandVKeystroke
+        postPasteKeystroke: @escaping () -> Bool = LiveAutoPasteService.postCommandVKeystroke,
+        focusedTextNeedsLeadingSpace: @escaping () -> Bool = LiveAutoPasteService.systemFocusedElementNeedsLeadingSpace
     ) {
         self.frontmostApplicationProvider = frontmostApplicationProvider
         self.ownBundleIdentifier = ownBundleIdentifier
@@ -126,6 +130,7 @@ final class LiveAutoPasteService: AutoPasteServicing {
         self.restorePasteboardString = restorePasteboardString
         self.activateTarget = activateTarget
         self.postPasteKeystroke = postPasteKeystroke
+        self.focusedTextNeedsLeadingSpace = focusedTextNeedsLeadingSpace
     }
 
     func captureTarget() -> AutoPasteTarget? {
@@ -145,8 +150,22 @@ final class LiveAutoPasteService: AutoPasteServicing {
         guard !target.runningApplication.isTerminated else { return .targetUnavailable }
         guard !isFocusedElementSecure() else { return .secureField }
 
+        // Cada transcripción llega recortada de espacios (ver `TranscriptionService`), así que dos
+        // dictados consecutivos sobre el mismo campo (p. ej. terminar una oración, grabar de nuevo
+        // y seguir) se pegarían pegados sin espacio entre medio. La señal principal es
+        // `lastPastedTarget`: si el último auto-paste que efectivamente llegó a pegarse fue sobre
+        // este mismo destino, este pegado es casi con certeza una continuación del anterior, sin
+        // importar qué tan bien (o mal) ese destino exponga su texto/cursor por Accesibilidad — a
+        // diferencia de `focusedTextNeedsLeadingSpace()`, que en la práctica falla en varios
+        // toolkits (vistas de texto basadas en web/Electron no exponen `AXValue`/
+        // `AXSelectedTextRange` de forma confiable) y por eso se mantiene solo como señal
+        // adicional, no principal. Se agrega ese espacio acá, no en `transcript`: la transcripción
+        // que se ve en la ventana y se copia a mano debe quedar intacta.
+        let isContinuingSameTarget = lastPastedTarget == target
+        let textToPaste = (isContinuingSameTarget || focusedTextNeedsLeadingSpace()) ? " " + text : text
+
         let previousClipboardText = readPasteboardString()
-        guard writeToPasteboard(text) else {
+        guard writeToPasteboard(textToPaste) else {
             // `writeToPasteboard` limpia el portapapeles antes de escribir (ver
             // `writeStringToGeneralPasteboard`), así que incluso si falla puede haber pisado el
             // contenido anterior — se restaura de una, sin esperar ni chequear `changeCount`: no
@@ -163,6 +182,9 @@ final class LiveAutoPasteService: AutoPasteServicing {
         }
 
         let result: AutoPasteResult = postPasteKeystroke() ? .pasted : .eventPostFailed
+        if result == .pasted {
+            lastPastedTarget = target
+        }
 
         try? await Task.sleep(for: Self.clipboardRestoreDelay)
         if pasteboardChangeCount() == changeCountAfterOurWrite {
@@ -192,6 +214,43 @@ final class LiveAutoPasteService: AutoPasteServicing {
             return false
         }
         return subroleString == kAXSecureTextFieldSubrole as String
+    }
+
+    /// Mejor esfuerzo, no garantizado: mira, vía Accesibilidad a nivel de sistema, qué carácter hay
+    /// justo antes del cursor en el campo con foco. Si ese carácter no es un espacio en blanco (o
+    /// el cursor está al principio del campo, o el campo no expone su valor/selección por AX —
+    /// mismo tipo de limitación de toolkit que `systemFocusedElementIsSecure`), no hace falta
+    /// agregar nada. El caso que sí importa: el cursor quedó justo después de una palabra (p. ej.
+    /// tras un auto-paste anterior) y una nueva transcripción se pegaría pegada a esa palabra sin
+    /// espacio de separación.
+    private static func systemFocusedElementNeedsLeadingSpace() -> Bool {
+        let systemWide = AXUIElementCreateSystemWide()
+        var focused: AnyObject?
+        guard AXUIElementCopyAttributeValue(systemWide, kAXFocusedUIElementAttribute as CFString, &focused) == .success,
+              let focusedElement = focused else {
+            return false
+        }
+        let element = focusedElement as! AXUIElement
+
+        var rangeValue: AnyObject?
+        guard AXUIElementCopyAttributeValue(element, kAXSelectedTextRangeAttribute as CFString, &rangeValue) == .success,
+              let rangeValue else {
+            return false
+        }
+        var range = CFRange()
+        guard AXValueGetValue(rangeValue as! AXValue, .cfRange, &range), range.location > 0 else {
+            return false
+        }
+
+        var value: AnyObject?
+        guard AXUIElementCopyAttributeValue(element, kAXValueAttribute as CFString, &value) == .success,
+              let text = value as? String else {
+            return false
+        }
+        let text16 = text as NSString
+        guard range.location <= text16.length else { return false }
+        let previousCharacter = text16.substring(with: NSRange(location: range.location - 1, length: 1))
+        return previousCharacter.rangeOfCharacter(from: .whitespacesAndNewlines) == nil
     }
 
     private static func readGeneralPasteboardString() -> String? {

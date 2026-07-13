@@ -22,7 +22,7 @@ final class DictationViewModelPrimaryStateTests: XCTestCase {
 
         XCTAssertEqual(viewModel.primaryState, .ready)
         XCTAssertEqual(viewModel.primaryStateTitle, "Listo para dictar")
-        XCTAssertEqual(viewModel.primaryStateHint, "Presioná Fn + Espacio para dictar")
+        XCTAssertEqual(viewModel.primaryStateHint, "Mantené Fn presionado para dictar")
         XCTAssertFalse(viewModel.showCopyCallToAction)
     }
 
@@ -87,14 +87,14 @@ final class DictationViewModelPrimaryStateTests: XCTestCase {
         XCTAssertEqual(viewModel.primaryStateTitle, "Descargando modelo...")
     }
 
-    func testAccessibilityRequiredState() {
+    func testInputMonitoringRequiredState() {
         let viewModel = makeViewModel()
         viewModel.state = AppState(permission: .authorized, model: .installed, session: .idle, error: nil)
         viewModel.transcript = ""
-        viewModel.hotkeyStatus = .accessibilityPermissionRequired
+        viewModel.hotkeyStatus = .inputMonitoringPermissionRequired
 
-        XCTAssertEqual(viewModel.primaryState, .accessibilityRequired)
-        XCTAssertEqual(viewModel.primaryStateTitle, "Permiso de Accesibilidad requerido")
+        XCTAssertEqual(viewModel.primaryState, .inputMonitoringRequired)
+        XCTAssertEqual(viewModel.primaryStateTitle, "Permiso de Monitoreo de entrada requerido")
     }
 
     func testErrorStateTakesPriorityOverEverythingElse() {

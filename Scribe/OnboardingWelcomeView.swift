@@ -16,7 +16,7 @@ struct OnboardingWelcomeView: View {
             VStack(alignment: .leading, spacing: 4) {
                 Text("Todo el audio y el texto se procesan en esta Mac; nada se envía a servidores.")
                 Text("Otorgá permiso de Micrófono y de Accesibilidad para dictar desde cualquier app.")
-                Text("Usá Fn + Espacio para empezar y detener la grabación.")
+                Text("Mantené Fn presionado para grabar; soltalo para detener.")
             }
             .accessibilityElement(children: .combine)
 

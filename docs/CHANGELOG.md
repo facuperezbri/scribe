@@ -4,6 +4,61 @@ Historical record of how Scribe got to its current shape, newest first. This is 
 phase/MVP references — unlike code comments and the README, a changelog's whole purpose is being
 a timeline. For the *why* behind specific choices, see [DECISIONS.md](DECISIONS.md).
 
+## Hotkey: `CGEventTap` migration + double-tap-to-lock hands-free mode
+
+Replaced the dual `NSEvent` global/local monitor pair with a single `CGEventTap` on
+`flagsChanged`, so `LiveGlobalHotkeyService` can now *consume* the Fn edge (return `nil` from the
+tap callback) instead of only observing it — an attempt at suppressing macOS's own "Press 🌐 Fn key
+to:" system action from firing alongside Scribe's shortcut, matching what Wispr Flow appears to do.
+**Not verified on real hardware** — this environment can't run the app, so whether the suppression
+actually works in practice is unconfirmed; the "Do Nothing" system-setting mitigation documented
+below remains the fallback. This also swaps the permission the hotkey needs from Accessibility to
+**Input Monitoring** (`IOHIDCheckAccess`/`Privacy_ListenEvent`), a separate TCC permission;
+`AutoPasteService`'s own Accessibility check for its synthetic ⌘V is unaffected. See
+[DECISIONS.md](DECISIONS.md) for the full mechanism and why `currentStatus()` retries tap creation
+lazily instead of once.
+
+Also added a double-tap-to-lock hands-free mode on top of push-to-talk (matching Wispr Flow):
+tapping the shortcut twice quickly locks recording on without holding it down; a third tap stops.
+Implemented as an internal `PushToTalkState` (`.idle`/`.recording`/`.locked`) state machine inside
+`LiveGlobalHotkeyService`, with **no change** to the `GlobalHotkeyServicing` protocol or to
+`DictationViewModel`'s decision logic — it still sees a single `onHotkeyPressed` callback per real
+edge. Releasing the shortcut now waits a short `doubleTapWindow` (defaults to
+`NSEvent.doubleClickInterval`) before emitting, in case a second tap arrives; this adds that same
+latency to every normal push-to-talk release, not just double-taps.
+
+Renamed `HotkeyStatus.accessibilityPermissionRequired` → `.inputMonitoringPermissionRequired` (and
+the matching `PrimaryState`/UI copy) throughout `HotkeyStatusView`, `MenuBarContentView`,
+`ContentView`, `DictationStatusView`, `DictationViewModel`, and `PermissionStatusController`.
+Covered by a rewritten `GlobalHotkeyServiceTests`, including a new "modo manos libres" section
+exercising the double-tap/lock/stray-callback edge cases.
+
+## Hotkey: Fn push-to-talk (matches Whispr's actual default)
+
+Corrected the trigger introduced in the entry below: Whispr's actual default push-to-talk key is
+Fn alone, not Control — Control was an intermediate step during that migration. Swapped
+`HotkeyModifierTrigger`'s default from `.control` to `.function`; no other part of the mechanism
+changed (`.flagsChanged` edge detection, `GlobalHotkeyServicing`, `DictationViewModel` wiring). See
+[DECISIONS.md](DECISIONS.md) for the real trade-off this raises: macOS's own System Settings →
+Keyboard → "Press 🌐 Fn key to:" feature (change input source, show Emoji & Symbols, start
+Dictation) listens for the exact same bare-Fn gesture, and Scribe has no way to suppress that
+system-level behavior from an app-level event monitor — using Fn for Scribe's shortcut while that
+setting is anything other than "Do Nothing" means both fire on every recording. The only real fix
+is setting it to "Do Nothing" (documented in the README); this is the same requirement Whispr
+documents for its own default shortcut.
+
+## Hotkey: Control push-to-talk + bottom overlay placement
+
+Replaced the Fn + Espacio toggle shortcut with holding Control (push-to-talk, matching Whispr):
+pressing starts recording, releasing stops and transcribes, instead of two separate toggle
+presses. `HotkeyTrigger` (keyCode + modifier over `keyDown`) became `HotkeyModifierTrigger` (a bare
+modifier over `flagsChanged`), since Control alone never generates a `keyDown`. The
+`GlobalHotkeyServicing` contract didn't need to change — the same `onHotkeyPressed` callback now
+fires on both edges (Control down and up), which is enough because `handlePrimaryDictationAction`
+already decides what to do from the current session state. See [DECISIONS.md](DECISIONS.md) for
+the rationale and the known trade-off (Control is also used in system/app shortcuts like Ctrl+C).
+Also moved the floating recording overlay from the top to the bottom of the screen.
+
 ## MVP5 — auto-paste
 
 Added automatic pasting of a successful transcription into whichever app was focused right before
