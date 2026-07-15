@@ -6,14 +6,17 @@ struct TranscribingFeedbackView: View {
     let onCancel: () -> Void
 
     var body: some View {
-        VStack(spacing: 8) {
+        VStack(spacing: ScribeSpacing.sm) {
             ProgressView()
                 .controlSize(.small)
+                .accessibilityLabel("Transcribiendo localmente")
 
             Button("Cancelar", action: onCancel)
                 .buttonStyle(.bordered)
                 .controlSize(.small)
+                .accessibilityHint("Descarta el resultado cuando llegue; no detiene la inferencia al instante")
         }
+        .accessibilityElement(children: .contain)
     }
 }
 

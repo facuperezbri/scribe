@@ -16,27 +16,35 @@ struct RecordingFeedbackView: View {
     }
 
     var body: some View {
-        VStack(spacing: 8) {
-            HStack(spacing: 10) {
+        VStack(spacing: ScribeSpacing.sm) {
+            HStack(spacing: ScribeSpacing.md) {
                 Circle()
-                    .fill(Color.red)
+                    .fill(ScribeColors.recording)
                     .frame(width: 8, height: 8)
 
                 Text(formattedElapsed)
-                    .font(.system(.body, design: .monospaced))
-                    .foregroundStyle(.secondary)
+                    .font(ScribeTypography.monoTimer)
+                    .foregroundStyle(ScribeColors.inkSecondary)
 
                 InputLevelMeter(level: inputLevel)
-                    .frame(width: 90, height: 8)
+                    .frame(width: 100, height: 8)
             }
 
             if let warningText {
                 Text(warningText)
-                    .font(.caption)
-                    .foregroundStyle(isStrongWarning ? .red : .orange)
+                    .font(ScribeTypography.metadata)
+                    .foregroundStyle(isStrongWarning ? ScribeColors.error : ScribeColors.warning)
                     .multilineTextAlignment(.center)
             }
         }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(recordingAccessibilityLabel)
+    }
+
+    private var recordingAccessibilityLabel: String {
+        var parts = ["Grabando", formattedElapsed]
+        if let warningText { parts.append(warningText) }
+        return parts.joined(separator: ". ")
     }
 }
 
@@ -48,11 +56,11 @@ private struct InputLevelMeter: View {
         GeometryReader { proxy in
             ZStack(alignment: .leading) {
                 Capsule()
-                    .fill(Color.gray.opacity(0.25))
+                    .fill(ScribeColors.meterTrack)
                 Capsule()
-                    .fill(Color.green)
+                    .fill(ScribeColors.meterFill)
                     .frame(width: proxy.size.width * CGFloat(max(0, min(1, level))))
-                    .animation(.linear(duration: 0.15), value: level)
+                    .animation(.linear(duration: ScribeMotion.meter), value: level)
             }
         }
         .clipShape(Capsule())
