@@ -40,15 +40,6 @@ final class TranscriptionService: TranscriptionServicing {
     // sobre el ruido medido sin perder voz real.
     private let silenceDetector = EnergyVAD(energyThreshold: 0.006)
 
-    /// Frase de muestra en español con puntuación y mayúsculas correctas, tokenizada y pasada como
-    /// "prompt" de Whisper (`DecodingOptions.promptTokens`). Los dictados de esta app son clips
-    /// cortos y aislados, sin ningún audio previo real que condicione al modelo: sin este empujón,
-    /// Whisper large-v3 tiende a devolver todo en minúscula y sin puntuación en frases cortas,
-    /// porque no tiene señal de dónde empieza/termina una oración. El prompt nunca aparece en el
-    /// resultado — solo predispone el estilo de lo que sigue, igual que el parámetro `prompt` de
-    /// la propia referencia de WhisperKit.
-    private static let formattingPromptText = "Hola, ¿cómo estás? Hoy es un buen día para empezar de nuevo."
-
     init(modelManager: ModelManaging) {
         self.modelManager = modelManager
     }
@@ -67,19 +58,11 @@ final class TranscriptionService: TranscriptionServicing {
         let options = DecodingOptions(
             task: .transcribe,
             language: language,
-            detectLanguage: false,
-            promptTokens: formattingPromptTokens(tokenizer: kit.tokenizer)
+            detectLanguage: false
         )
         let results: [TranscriptionResult] = try await kit.transcribe(audioArray: audioSamples, decodeOptions: options)
         let text = results.map(\.text).joined(separator: " ")
         return text.trimmingCharacters(in: .whitespacesAndNewlines)
-    }
-
-    private func formattingPromptTokens(tokenizer: WhisperTokenizer?) -> [Int]? {
-        guard let tokenizer else { return nil }
-        let tokens = tokenizer.encode(text: " " + Self.formattingPromptText)
-            .filter { $0 < tokenizer.specialTokens.specialTokenBegin }
-        return tokens.isEmpty ? nil : tokens
     }
 
     private func loadedWhisperKit(modelFolder: URL) async throws -> WhisperKit {

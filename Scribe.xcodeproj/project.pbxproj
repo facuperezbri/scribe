@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		0069334D8C5DC8CFAC31B67E /* PermissionStatusControllerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AD2C29933D45818F32D6613F /* PermissionStatusControllerTests.swift */; };
+		02705E7D30C8ACD04043D674 /* AppleIntelligenceAvailability.swift in Sources */ = {isa = PBXBuildFile; fileRef = 19F42E3FE01C7576026449DE /* AppleIntelligenceAvailability.swift */; };
 		028DA7669A1E71CBB31996BE /* TranscriptEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B48889A2A3F008630DAFCA77 /* TranscriptEditorView.swift */; };
 		051D7BE6DC2EEBBC01AE0AB7 /* RecordingDurationPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC60939B12CF88612FD94E7D /* RecordingDurationPolicy.swift */; };
 		0D2E35316043119F4FFBB304 /* TranscriptSessionController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 72ED7A7E0F9A7BFAB3EF4FE2 /* TranscriptSessionController.swift */; };
@@ -29,6 +30,7 @@
 		465B71CD143797137C3CEFCC /* DictationViewModelPresentationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5788AABF32BDF2FFC9220EE3 /* DictationViewModelPresentationTests.swift */; };
 		4716529AB4419B0229B08D4A /* DictationViewModelOnboardingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CE3EE590DB31F8368623D8D3 /* DictationViewModelOnboardingTests.swift */; };
 		47C1D21CCFE2FBD4908498BE /* ModelManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 35CFB6E9CC787F17C0F71EDD /* ModelManager.swift */; };
+		506D7102DCA884DC40E8D4EB /* TranscriptFormattingService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8151F6CCC92CB7057C687E89 /* TranscriptFormattingService.swift */; };
 		51B70E1497CB4700B517604B /* SetupAttentionBanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = 82BD9DFAA11A726B38C3ED3F /* SetupAttentionBanner.swift */; };
 		549CAB59832BBAE3D7514386 /* MenuBarContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 231B557B052C6195E33F6795 /* MenuBarContentView.swift */; };
 		564C50CF3324C5DDFCD12FAB /* RecordingOverlayController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 359F2F862E9292FC5D50CD33 /* RecordingOverlayController.swift */; };
@@ -93,6 +95,7 @@
 		0D9B56D3A82F894C60EF067C /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		11345C81116DC36BA7419B25 /* Scribe.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Scribe.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		19813E0FCBF4521C87E345E8 /* TranscriptionAttemptCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TranscriptionAttemptCoordinator.swift; sourceTree = "<group>"; };
+		19F42E3FE01C7576026449DE /* AppleIntelligenceAvailability.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppleIntelligenceAvailability.swift; sourceTree = "<group>"; };
 		20DFDB2D846C452C5E6A39BE /* RecordingMeterTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecordingMeterTests.swift; sourceTree = "<group>"; };
 		231B557B052C6195E33F6795 /* MenuBarContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuBarContentView.swift; sourceTree = "<group>"; };
 		270EB5CBE621E352E36B2C0E /* StoragePaths.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoragePaths.swift; sourceTree = "<group>"; };
@@ -120,6 +123,7 @@
 		79E161F13FABC356F0163E63 /* DictationViewModelDependencyInjectionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DictationViewModelDependencyInjectionTests.swift; sourceTree = "<group>"; };
 		7AACB5FE2EC5F8870D0D078B /* ModelManagerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModelManagerTests.swift; sourceTree = "<group>"; };
 		7E838D859C563E1B532B8EFC /* MicrophonePermissionManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MicrophonePermissionManager.swift; sourceTree = "<group>"; };
+		8151F6CCC92CB7057C687E89 /* TranscriptFormattingService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TranscriptFormattingService.swift; sourceTree = "<group>"; };
 		82BD9DFAA11A726B38C3ED3F /* SetupAttentionBanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SetupAttentionBanner.swift; sourceTree = "<group>"; };
 		836EFA7D5DCDCAEB03186377 /* DictationViewModelStateModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DictationViewModelStateModelTests.swift; sourceTree = "<group>"; };
 		8641F35097FD59A26DFE450B /* RecordingDurationPolicyTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecordingDurationPolicyTests.swift; sourceTree = "<group>"; };
@@ -217,6 +221,7 @@
 			children = (
 				3711DECCD9B3CE4D5706D0B9 /* AppDelegate.swift */,
 				C7F8EC336858331662965E7A /* AppError.swift */,
+				19F42E3FE01C7576026449DE /* AppleIntelligenceAvailability.swift */,
 				0D9B56D3A82F894C60EF067C /* Assets.xcassets */,
 				44B2F7FEBA1CBE0089ADBD0E /* AudioRecorderService.swift */,
 				BC12DB7E78A47777348D3637 /* AutoPasteService.swift */,
@@ -250,6 +255,7 @@
 				89C25C110FE569E3C068CADD /* TranscriptActionBar.swift */,
 				B48889A2A3F008630DAFCA77 /* TranscriptEditorView.swift */,
 				EBB950024A30A8175CD07796 /* TranscriptEmptyState.swift */,
+				8151F6CCC92CB7057C687E89 /* TranscriptFormattingService.swift */,
 				19813E0FCBF4521C87E345E8 /* TranscriptionAttemptCoordinator.swift */,
 				3459846C3E245FF0263E574C /* TranscriptionService.swift */,
 				F11298339C3F871C94AD78BC /* TranscriptRecoveryBanner.swift */,
@@ -403,6 +409,7 @@
 			files = (
 				58FA6F896CE30C27264BF0D7 /* AppDelegate.swift in Sources */,
 				A1CE7CEA3BD99F6D1E1054DE /* AppError.swift in Sources */,
+				02705E7D30C8ACD04043D674 /* AppleIntelligenceAvailability.swift in Sources */,
 				56CD80C1D6AECC3A0B9E8E49 /* AudioRecorderService.swift in Sources */,
 				E0B84DA1EEA80AD897F43DC6 /* AutoPasteService.swift in Sources */,
 				21A0F9DF7771CDC6401EF1D1 /* ClipboardService.swift in Sources */,
@@ -434,6 +441,7 @@
 				9D8591339EED2FC40E562DCD /* TranscriptActionBar.swift in Sources */,
 				028DA7669A1E71CBB31996BE /* TranscriptEditorView.swift in Sources */,
 				16D75FEC307F5A7B84774BAC /* TranscriptEmptyState.swift in Sources */,
+				506D7102DCA884DC40E8D4EB /* TranscriptFormattingService.swift in Sources */,
 				F15D7F962DBEB03524AA27DB /* TranscriptRecoveryBanner.swift in Sources */,
 				0D2E35316043119F4FFBB304 /* TranscriptSessionController.swift in Sources */,
 				D789BA5437600DF9A0F38906 /* TranscriptStore.swift in Sources */,
@@ -467,7 +475,7 @@
 					"@executable_path/../Frameworks",
 					"@loader_path/../Frameworks",
 				);
-				MACOSX_DEPLOYMENT_TARGET = 13.0;
+				MACOSX_DEPLOYMENT_TARGET = 26.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.localdictate.app.tests;
 				SDKROOT = macosx;
 				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Scribe.app/Contents/MacOS/Scribe";
@@ -487,7 +495,7 @@
 					"@executable_path/../Frameworks",
 					"@loader_path/../Frameworks",
 				);
-				MACOSX_DEPLOYMENT_TARGET = 13.0;
+				MACOSX_DEPLOYMENT_TARGET = 26.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.localdictate.app.tests;
 				SDKROOT = macosx;
 				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Scribe.app/Contents/MacOS/Scribe";
@@ -513,7 +521,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MACOSX_DEPLOYMENT_TARGET = 13.0;
+				MACOSX_DEPLOYMENT_TARGET = 26.0;
 				MARKETING_VERSION = 0.1;
 				PRODUCT_BUNDLE_IDENTIFIER = com.localdictate.app;
 				PRODUCT_NAME = Scribe;
@@ -573,7 +581,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				MACOSX_DEPLOYMENT_TARGET = 13.0;
+				MACOSX_DEPLOYMENT_TARGET = 26.0;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;
@@ -630,7 +638,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				MACOSX_DEPLOYMENT_TARGET = 13.0;
+				MACOSX_DEPLOYMENT_TARGET = 26.0;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -660,7 +668,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MACOSX_DEPLOYMENT_TARGET = 13.0;
+				MACOSX_DEPLOYMENT_TARGET = 26.0;
 				MARKETING_VERSION = 0.1;
 				PRODUCT_BUNDLE_IDENTIFIER = com.localdictate.app;
 				PRODUCT_NAME = Scribe;
