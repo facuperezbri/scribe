@@ -4,6 +4,105 @@ Historical record of how Scribe got to its current shape, newest first. This is 
 phase/MVP references — unlike code comments and the README, a changelog's whole purpose is being
 a timeline. For the *why* behind specific choices, see [DECISIONS.md](DECISIONS.md).
 
+## UI Phase 7 — premium redesign: control-center identity
+
+Full visual redesign of the main window into an original "private dictation cockpit"
+identity — calmer, more spacious, higher-hierarchy, without cloning any third-party
+dictation app's layout or branding. Preserves all Fn/menu-bar/overlay/auto-paste/local
+transcription behavior.
+
+- **`ScribeDesignTokens`** — adaptive warm-graphite/warm-neutral surfaces (not pure black),
+  a restrained electric-indigo accent, distinguishable state colors (coral recording vs.
+  magenta-red error vs. amber warning vs. green success), a wider 4–40pt spacing scale, and
+  a larger five-role type scale (brand, primary state, section title, transcript, body,
+  status value, metadata).
+- **`ScribeCardStyle`** — `scribeCard()` (hero/transcript), new `scribeQuietSurface()` (system
+  status footer), and `scribeControlSurface()`; removed the general-purpose `SystemStatusPill`
+  chip and the `scribeAccentPill`/`cardBackground` legacy aliases.
+- **`ScribeMainView`** — rebuilt around three zones (identity bar; hero dictation card +
+  transcript card; system status footer) at an 820×680 ideal / 760×620 minimum window,
+  replacing the previous 660×520 two-column layout with a fixed right inspector.
+- **`ScribeHeaderView`** — simplified identity bar: brand, one live state label, a quiet
+  "Local" privacy tag, and the settings menu. Removed the duplicated model pill.
+- **`DictationControlCard`** — hero treatment: a larger five-bar voice motif, a 28pt primary
+  state title, the Fn shortcut with short helper copy, and a single contextual record/stop
+  action. Removed the setup banner and status-chip strip (moved out of the card).
+- **`SpeechSignalView`** — the voice motif now has a dedicated hero size (bigger, five bars)
+  for the control card, distinct from the compact three-bar size used by the overlay.
+- **`SetupAttentionBanner`** — consolidated into one quiet, single-line-per-issue row shown
+  above the hero/transcript row (still covers mic, Input Monitoring, Accessibility, model).
+- **`LastTranscriptCard` / `TranscriptEditorView` / `TranscriptActionBar`** — copy/clear moved
+  into the card header; the transcript surface got more inset, larger type, and line spacing
+  for comfortable reading; metadata moved to a quiet trailing line.
+- **`TranscriptRecoveryBanner`** — now a subtle inline row ("Transcripción anterior
+  disponible · Recuperar") instead of its own tinted card.
+- **`TranscriptEmptyState`** — shorter, calmer copy.
+- **`SystemStatusFooter`** (replaces `SystemInspectorView`) — one full-width quiet surface
+  with exactly five short label/value pairs (Modelo, Micrófono, Accesibilidad, Auto-pegado,
+  Privacidad); the Fn/hotkey status now lives only in the attention row, not duplicated here.
+- **Removed dead code** — deleted the unused legacy views (`DictationStatusView`,
+  `RecordingButton`, `ModelStatusView`, `HotkeyStatusView`, `PrivacyNoteView`) and the
+  `Metrics.swift` compatibility aliases; nothing referenced them outside their own files.
+- **README** — updated Usage and Architecture sections for the new layout and file list.
+
+## UI Phase 6 — accessibility and consistency pass
+
+Final polish pass across the redesigned main window:
+
+- **Accessibility** — explicit VoiceOver labels for the control card state row, mouse record button, model pill, status strip, recording/transcribing feedback, and settings onboarding dismiss.
+- **Spanish copy** — aligned Fn hints to **"Mantené Fn para hablar"** in onboarding, empty state, and editor hints; settings menu uses **"modo manos libres"** for double-tap lock.
+- **README** — updated Usage and Architecture sections to describe the new control-center layout and system inspector.
+
+## UI Phase 5 — settings and status polish
+
+Clarified first-use setup states without adding a settings screen:
+
+- **`SetupAttentionBanner`** — compact warnings for missing mic, Input Monitoring, Accessibility (auto-paste), or local model, each with recovery action.
+- **`SystemInspectorView`** — richer rows with helper copy, download progress, Accessibility row, and refresh control.
+- **`ScribeSettingsMenu`** — grouped shortcut info, auto-paste toggle, permission deep links, and model actions.
+- **`PermissionStatusController`** / **`DictationViewModel`** — proactive Accessibility check (`AXIsProcessTrusted`), `refreshSystemPermissions()`, and `setupIssues` for the UI.
+- Hint copy updated to **"Mantené Fn para hablar"**.
+
+## UI Phase 4 — transcript polish
+
+Polished the honest single-transcript experience (no fake history):
+
+- **`TranscriptEmptyState`** — clear empty state with Fn hint and "solo la última" disclaimer.
+- **`TranscriptRecoveryBanner`** — preview + recover for the one-slot `previousTranscript` buffer.
+- **`TranscriptActionBar`** — copy/clear with SF Symbol labels and accessibility hints.
+- **`LastTranscriptCard`** — section header explaining local-only persistence; empty vs editor modes.
+- **`TranscriptEditorView`** — bounded height with internal scroll; metadata only when non-empty.
+
+## UI Phase 3 — main window redesign
+
+Redesigned the main window as a compact local dictation control center ("cabina de dictado privada"):
+
+- **`ScribeMainView`** — asymmetric two-column layout: control card + last transcript (left), system inspector (right).
+- **`DictationControlCard`** — speech-signal motif, live state, Fn keycap, compact record fallback, status strip (local processing, auto-paste, model).
+- **`LastTranscriptCard`** — honest "Última transcripción" section with copy, clear, and single-slot recovery.
+- **`SystemInspectorView`** — compact system health rows (model, microphone, Fn hotkey, auto-paste toggle, privacy).
+- **`SpeechSignalView`** — shared three-bar voice motif for main window and overlay.
+- **`ScribeHeaderView`** — dynamic status line, model pill, settings menu (shortcut info, auto-paste, model folder, quit).
+- Fixed onboarding permission copy (Input Monitoring for Fn, Accessibility for auto-paste).
+
+No fake history, navigation, or dashboard screens. Menu bar, overlay, hotkey, and auto-paste behavior unchanged.
+
+## UI Phase 2 — design system tokens
+
+Introduced a lightweight visual foundation for the main-window redesign without changing layout or
+behavior:
+
+- **`ScribeDesignTokens`** — semantic colors (ink, accent, surfaces, state colors), spacing scale,
+  corner radii, typography roles, motion durations, and `PrimaryState` icon color mapping.
+- **`ScribeCardStyle`** — reusable `scribeCard()`, `scribeControlSurface()`, and `scribeAccentPill()`
+  modifiers; `SystemStatusPill` for compact status chips.
+- **`Metrics`** — now aliases token values for backward compatibility.
+- Existing views migrated to tokens (colors, fonts, spacing, card surfaces); recording pulse and
+  overlay transcribing dots respect **Reduce Motion**.
+
+No changes to dictation flow, menu bar, overlay controller behavior, hotkey, auto-paste, or transcript
+persistence.
+
 ## Hotkey: `CGEventTap` migration + double-tap-to-lock hands-free mode
 
 Replaced the dual `NSEvent` global/local monitor pair with a single `CGEventTap` on

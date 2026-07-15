@@ -1,27 +1,76 @@
 # Scribe
 
-macOS desktop app that records speech in Spanish and transcribes it fully
-on-device, using [WhisperKit](https://github.com/argmaxinc/argmax-oss-swift)
-(Whisper on Core ML) from Argmax. There is no backend, no analytics or
-telemetry, no login and no payments.
+macOS desktop app for **local Spanish dictation**: hold Fn (or click "Grabar"),
+speak, and get a cleaned transcript pasted into whatever app you were using — no
+account, no cloud transcription, no analytics or telemetry.
+
+Built on [WhisperKit](https://github.com/argmaxinc/argmax-oss-swift) (Whisper on
+Core ML) for on-device speech-to-text, with optional post-processing via Apple's
+on-device Foundation Models when Apple Intelligence is available.
+
+## At a glance
+
+- **On-device transcription** — Whisper `large-v3` runs locally; Spanish only.
+- **Fn push-to-talk** — global shortcut works from any app; background-first (no
+  focus steal). Double-tap Fn for hands-free lock.
+- **Floating overlay** — recording/transcribing feedback near the bottom of the
+  screen without bringing Scribe forward.
+- **Auto-paste** — successful transcriptions paste into the app that was focused
+  when recording started (synthetic ⌘V).
+- **Optional formatting** — Apple Intelligence can polish the literal Whisper
+  output (remove fillers, fix punctuation, Casual or Formal tone). Falls back to
+  raw text if unavailable.
+- **Single last transcript** — one honest transcript slot with copy/clear, inline
+  edit, and a one-slot undo after replace.
+- **Menu bar control** — start/stop, copy, show window, toggles, and permission
+  shortcuts always available.
+
+## Table of contents
+
+- [Privacy](#privacy)
+- [Requirements](#requirements)
+- [Build and run](#build-and-run)
+- [Running the tests](#running-the-tests)
+- [Usage](#usage)
+- [Architecture](#architecture)
+- [Model](#model)
+- [Transcript](#transcript)
+- [Storage migration (LocalDictate → Scribe)](#storage-migration-localdictate--scribe)
+- [Error handling](#error-handling)
+- [Troubleshooting](#troubleshooting)
+- [Manual QA checklist](#manual-qa-checklist)
+- [Known limitations](#known-limitations)
+- [Learn more](#learn-more)
 
 ## Privacy
 
-> Audio and text are processed locally on this Mac. Nothing is sent to
-> servers. The only use of the internet is to download the model if it
-> isn't installed yet.
+> Audio and text stay on this Mac. Nothing is sent to Scribe's servers — there
+> are none.
 
-This is the only network operation in the whole app: the initial download
-of the Whisper model, triggered exclusively by the user via the "Descargar
-modelo" button. `ModelManager` never downloads anything on its own; it only
-reads disk to check whether the model is already installed.
+Scribe has two separate on-device processing paths:
+
+**Transcription (required for dictation).** Audio is recorded to a local WAV
+file and transcribed by WhisperKit on this Mac. The only network use in the
+whole app is the **one-time download** of the Whisper model (~626 MB), triggered
+exclusively by the user via "Descargar modelo". `ModelManager` never downloads
+on its own; it only reads disk to check whether the model is already installed.
+
+**Formatting (optional, on by default).** After Whisper finishes, Scribe can pass
+the literal transcript through Apple's on-device Foundation Models (Apple
+Intelligence) to clean up fillers, stutters, and punctuation. This also runs
+entirely on the Mac — no cloud API — but it **requires Apple Intelligence to be
+enabled** on a supported machine. If Apple Intelligence is off, not ready, or
+the reformat step fails, Scribe keeps the literal Whisper text and continues;
+formatting never blocks dictation.
 
 ## Requirements
 
-- macOS 13 or later
-- Xcode 15 or later
+- macOS 26 or later
+- Xcode 26 or later (aligned with the deployment target in `project.yml`)
 - [xcodegen](https://github.com/yonaskolb/XcodeGen) (`brew install xcodegen`)
-- ~1 GB of free disk space for the model (`large-v3-v20240930_626MB`)
+- ~1 GB of free disk space for the Whisper model (`large-v3-v20240930_626MB`)
+- **For formatting:** a Mac that supports Apple Intelligence, with it enabled in
+  System Settings. Transcription works without it; formatting is skipped instead.
 
 ## Build and run
 
@@ -43,9 +92,9 @@ xcodebuild -project Scribe.xcodeproj -scheme Scribe \
 ## Running the tests
 
 The tests live in the `ScribeTests` target (unit tests, no UI tests).
-They don't require a real microphone, a model download, or WhisperKit: they
-only exercise `DictationViewModel` (and the controllers it delegates to)
-through fakes, by manipulating state directly.
+They don't require a real microphone, a model download, WhisperKit, or Apple
+Intelligence: they exercise `DictationViewModel` (and the controllers it
+delegates to) through fakes, by manipulating state directly.
 
 From Xcode: ⌘U with the `Scribe` scheme (the tests are wired into its
 test action).
@@ -60,33 +109,34 @@ xcodebuild -project Scribe.xcodeproj -scheme Scribe \
 
 ## Usage
 
-The window is a compact dictation utility, not a document editor: a header,
-a central status area that's the main thing you look at, the record button,
-a small transcript card, and a thin footer.
+The main window is a calm local dictation control center (~820×680), not a
+document editor: an identity bar (brand, live state, settings menu), an inline
+attention row when setup needs action, a hero dictation card (voice motif, Fn
+shortcut, contextual record/stop) alongside the last-transcript card, and a
+quiet full-width system status footer (model, microphone, accessibility,
+auto-paste, formatting, privacy).
 
 1. Press "Grabar" (or hold Fn, see below) and speak in Spanish. While
-   recording, the central status area shows a pulsing red indicator, the
-   elapsed time, a meter for the microphone's input level (to confirm audio
-   is being captured), and, past 2 and 5 minutes, a warning that the
-   recording is getting long. Press "Detener" to stop.
+   recording, the control card shows elapsed time, a microphone level meter
+   (to confirm audio is being captured), and, past 2 and 5 minutes, a warning
+   that the recording is getting long. Press "Detener" to stop.
 2. The first time, the model (~626 MB) needs to be downloaded with the
    "Descargar modelo" button. Transcription of the pending recording starts
    automatically as soon as the download finishes.
-3. While transcribing, the central status area shows "Transcribiendo
-   localmente..." with an indeterminate progress indicator (WhisperKit
+3. While transcribing, the control card shows an indeterminate progress indicator (WhisperKit
    doesn't expose incremental progress for this step) along with a
    "Cancelar" button. Cancelling is "soft": the app discards the result as
    soon as it arrives, but it can't guarantee WhisperKit will abort inference
-   midway.
-4. Once transcribed, the central area shows "Transcripción lista" with a
-   prominent "Copiar" action. The text itself appears below in a smaller,
-   secondary transcript card, with a word/character counter under it. It can
-   be edited by hand, copied with the "Copiar" button next to "Limpiar", or
-   cleared with "Limpiar". Recording again while there's an existing
-   transcript starts immediately (no confirmation) and replaces it, showing
-   a small "Deshacer reemplazo" button to bring the previous one back; only
-   "Limpiar" still asks for confirmation, since it's the one way to lose text
-   with no way back (see [docs/DECISIONS.md](docs/DECISIONS.md) for why).
+   midway. If formatting is enabled and Apple Intelligence is available, the
+   status line briefly shows "Puliendo transcripción..." after Whisper finishes
+   but before the text appears — still under `session == .transcribing`, so the
+   overlay stays in its transcribing state for both steps.
+4. Once done, the control card shows "Transcripción lista". The text
+   appears in the last-transcript card, with copy/clear actions and an
+   optional one-slot recovery banner. It can be edited by hand. Recording again
+   while there's an existing transcript starts immediately (no confirmation) and
+   replaces it; only "Limpiar" asks for confirmation (see
+   [docs/DECISIONS.md](docs/DECISIONS.md) for why).
 5. Once the model is installed, "Ver en Finder" opens the folder where it
    lives on disk.
 6. Holding Fn anywhere in macOS — not just with Scribe's window
@@ -100,10 +150,34 @@ a small transcript card, and a thin footer.
    recording/transcribing feedback instead, and a menu bar item is always
    available as an alternative way to start/stop, show the window, or copy
    the last transcript.
-7. As soon as that transcription is ready, Scribe automatically pastes it
-   into whichever app was focused right before you started dictating — see
-   "Auto-paste" below. "Copiar" keeps working exactly as before regardless
-   of whether the auto-paste succeeded.
+7. As soon as the final text is ready (formatted or literal), Scribe
+   automatically pastes it into whichever app was focused right before you
+   started dictating — see "Auto-paste" below. "Copiar" keeps working exactly
+   as before regardless of whether the auto-paste succeeded.
+
+### Transcript formatting
+
+After Whisper produces a literal transcript, Scribe can optionally run it through
+Apple's on-device Foundation Models to clean it up:
+
+- **What it does.** Removes conversational fillers ("o sea", "eh", …), stutters,
+  and accidental repetitions; fixes punctuation and capitalization. Two tone
+  profiles — **Casual** and **Formal** — adjust style; both always clean the
+  text (there is no "literal only" profile — turn formatting off for that).
+- **Default.** Formatting is **on** at first launch. If Apple Intelligence is
+  unavailable or the model throws, Scribe silently keeps the literal Whisper
+  output — same non-blocking philosophy as auto-paste.
+- **Controls.** Toggle and profile picker live in the **settings menu** (gear in
+  the identity bar) and the **Reformateo** column of the system status footer.
+  When formatting is on but Apple Intelligence isn't ready, the attention row
+  shows "Reformateo necesita Apple Intelligence" with an "Abrir Ajustes" action.
+- **Not a security boundary.** The formatting prompt treats all transcript text
+  as content to clean, not as instructions to follow — best-effort, not a
+  guarantee against prompt injection via dictated text.
+
+Direct use of `FoundationModels` is confined to `TranscriptFormattingService`
+and `AppleIntelligenceAvailability`; the rest of the app only sees the
+`TranscriptFormatting` protocol.
 
 ### Global Fn shortcut and Input Monitoring permission
 
@@ -127,14 +201,11 @@ the UI, so granting it is always the user's explicit choice from System
 Settings.
 
 If that permission hasn't been granted yet, holding Fn does nothing, and
-Scribe shows a small status message next to the model status explaining why
-("Para usar Fn desde cualquier app, Scribe necesita permiso de Monitoreo de
-entrada."), with an "Abrir Ajustes" button that opens that privacy pane
-directly, and a "Revisar permiso" button to recheck without restarting the
-app. The status also rechecks automatically whenever the app becomes active
-again (e.g. after returning from System Settings). Missing this permission is
-non-fatal: the record/stop button in the main window always works regardless
-of it.
+Scribe shows setup guidance in the consolidated attention row ("Monitoreo de
+entrada"), with an "Abrir Ajustes" button and a refresh control that
+rechecks when the app becomes active again (e.g. after returning from
+System Settings). Missing this permission is non-fatal: the
+record/stop button in the main window always works regardless of it.
 
 **Hands-free mode:** tapping Fn twice quickly (within `doubleTapWindow`,
 which defaults to the system's double-click interval) locks recording on
@@ -194,9 +265,9 @@ to paste into, so nothing is attempted.
   app closed, permission missing, secure field, or the keystroke failing to post). Non-attempts (no
   target captured, empty transcript) show nothing at all, and the transcript/"Copiar" are never
   affected either way.
-- **Turning it off.** The menu bar menu has a "Pegado automático" toggle, on by default and
-  persisted across launches. There's no equivalent switch in the main window — the menu bar is the
-  only place to change it.
+- **Turning it off.** "Pegado automático" is on by default and persisted across launches. Toggle it
+  in the menu bar menu, the settings menu (gear), or the **Auto-pegado** column of the system
+  status footer — all three stay in sync.
 - **Stale results across sessions.** Transcribing and pasting are both async; if a new recording
   starts before a slow-resolving auto-paste from the previous session finishes, that late result is
   discarded instead of overwriting the new session's status.
@@ -226,10 +297,22 @@ known limitation).
 |---|---|
 | `ScribeApp.swift` | App entry point (`WindowGroup`) and the `openWindow` bridge for reopening a closed window. |
 | `AppDelegate.swift` | Owns the single long-lived `DictationViewModel` and the `RecordingOverlayController`, independent of window lifecycle. |
-| `ContentView.swift` | Main SwiftUI layout and confirmation dialogs. |
-| `Metrics.swift` | Shared spacing/corner-radius constants and the `cardBackground()` view modifier. |
-| `DictationViewModel.swift` | App state, `PrimaryState` copy mapping, and orchestration between services. |
+| `ContentView.swift` | Thin wrapper around `ScribeMainView`. |
+| `ScribeMainView.swift` | Main window layout: three calm zones — identity bar, hero dictation card + transcript, and system status footer. |
+| `ScribeDesignTokens.swift` | Adaptive semantic colors (warm graphite/indigo), spacing, radii, typography, and motion tokens. |
+| `ScribeCardStyle.swift` | Reusable `scribeCard()`, `scribeQuietSurface()`, and `scribeControlSurface()` modifiers. |
+| `DictationControlCard.swift` | Hero dictation card: voice motif, large `PrimaryState` title, Fn shortcut, and a contextual record/stop action. |
+| `LastTranscriptCard.swift` | Honest single-transcript section with empty state, editor, recovery, and actions. |
+| `SystemStatusFooter.swift` | Quiet full-width footer: model, microphone, accessibility, auto-paste, formatting, privacy. |
+| `SetupAttentionBanner.swift` | Compact consolidated attention row with recovery actions (mic, Input Monitoring, Accessibility, model, Apple Intelligence). |
+| `SpeechSignalView.swift` | Shared voice-motif bars (hero size for the control card, compact size for the overlay). |
+| `TranscriptEmptyState.swift` | Empty transcript placeholder with Fn hint. |
+| `TranscriptRecoveryBanner.swift` | One-slot undo-replace inline affordance and restore action. |
+| `TranscriptActionBar.swift` | Copy/clear actions for the last transcript, in the card header. |
+| `DictationViewModel.swift` | App state, `PrimaryState` copy mapping, orchestration between services, formatting, and auto-paste. |
 | `PermissionStatusController.swift` | Microphone permission status/request and Settings deep-links. |
+| `AppleIntelligenceAvailability.swift` | Live check of Apple Intelligence / Foundation Models availability and Settings deep-link. |
+| `TranscriptFormattingService.swift` | On-device transcript cleanup via `FoundationModels` (`TranscriptFormatting` protocol). |
 | `TranscriptSessionController.swift` | Debounced transcript load/save. |
 | `RecordingMeter.swift` | Elapsed time + input level polling while recording. |
 | `TranscriptionAttemptCoordinator.swift` | Discards a stale/cancelled transcription result. |
@@ -238,15 +321,10 @@ known limitation).
 | `RecordingOverlayController.swift` | Owns the non-activating `NSPanel` that shows the floating recording/transcribing/done overlay without stealing focus. |
 | `RecordingOverlayView.swift` | SwiftUI content of the floating overlay capsule (level bars, cascading dots, checkmark). |
 | `WindowActivationService.swift` | Brings Scribe's window to the front (`WindowActivationServicing`), used by `showMainWindow()` for the menu bar's "Mostrar Scribe". |
-| `ScribeHeaderView.swift` | Fixed header: app name and "Dictado local" line. |
-| `DictationStatusView.swift` | Central status area: icon, `PrimaryState` title, and the recording/transcribing/copy feedback nested inside it. |
-| `RecordingButton.swift` | Main Record/Stop button. |
-| `RecordingFeedbackView.swift` | Elapsed time, level meter, and duration warnings while recording (nested in `DictationStatusView`). |
-| `TranscribingFeedbackView.swift` | Progress indicator and cancel button while transcribing (nested in `DictationStatusView`). |
-| `TranscriptEditorView.swift` | Editable transcript area, with placeholder and word/character counter. |
-| `ModelStatusView.swift` | Model status (installed / downloading / not installed). |
-| `HotkeyStatusView.swift` | Global Fn shortcut status and Input-Monitoring-permission recovery UI. |
-| `PrivacyNoteView.swift` | Fixed privacy note at the bottom of the window. |
+| `ScribeHeaderView.swift` | Identity bar: brand, one live state label, a quiet "Local" privacy tag, and the settings menu (formatting, auto-paste, permissions). |
+| `RecordingFeedbackView.swift` | Elapsed time, level meter, and duration warnings while recording. |
+| `TranscribingFeedbackView.swift` | Progress indicator and cancel button while transcribing. |
+| `TranscriptEditorView.swift` | Editable transcript area with metadata when non-empty. |
 | `AudioRecorderService.swift` | Records audio to a local WAV file (16 kHz, mono, 16-bit). |
 | `GlobalHotkeyService.swift` | Global Fn `CGEventTap` (`GlobalHotkeyServicing`), its `HotkeyStatus`, and the double-tap-to-lock hands-free state machine. |
 | `MicrophonePermissionManager.swift` | System microphone permission. |
@@ -257,8 +335,8 @@ known limitation).
 | `AppError.swift` | Typed app error model and its category-to-message mapping. |
 
 Direct use of WhisperKit is confined to `ModelManager` and
-`TranscriptionService`; the rest of the app doesn't know about that
-dependency.
+`TranscriptionService`; direct use of `FoundationModels` is confined to
+`TranscriptFormattingService` and `AppleIntelligenceAvailability`.
 
 ### State model
 
@@ -272,6 +350,15 @@ dimensions instead of one flat "current mode" enum:
 - `error: AppError?` — the last error, if any, independent of the other
   three (e.g. the model can be missing while an unrelated clipboard error
   is still showing).
+
+While `session == .transcribing`, both Whisper inference and optional Apple
+Intelligence formatting run back-to-back; the overlay and control card stay in
+their transcribing presentation for the whole span.
+
+`setupIssues` surfaces configuration gaps for the attention banner, in priority
+order: microphone denied, Input Monitoring required, Accessibility required (only
+when auto-paste is on), missing model, and Apple Intelligence unavailable (only
+when formatting is on).
 
 Every record/stop action, regardless of where it comes from (the button, the
 global hotkey, or the menu bar), goes through a single entry point:
@@ -290,7 +377,7 @@ transcript is *not* treated this way — see
 covers the same risk without a blocking dialog.
 
 `PrimaryState` is a separate, derived mapping used only for the big title in
-`DictationStatusView` — `.ready`, `.recording`, `.stoppingRecording`,
+`DictationControlCard` — `.ready`, `.recording`, `.stoppingRecording`,
 `.transcribing`, `.transcriptReady`, `.microphoneDenied`, `.missingModel`,
 `.downloadingModel`, `.inputMonitoringRequired`, `.error(message)`. See
 [docs/DECISIONS.md](docs/DECISIONS.md) for why it's kept separate from
@@ -324,8 +411,8 @@ covers the same risk without a blocking dialog.
   path once, so it keeps working exactly like a normal transcript from then
   on. The legacy file is never deleted. If both exist, the current
   (`Scribe`) transcript always wins.
-- `UserDefaults` is only used for small preferences (e.g. the installed
-  model's path), never for the transcript text.
+- `UserDefaults` stores small preferences (model path, formatting on/off,
+  formatting profile, auto-paste on/off), never the transcript text itself.
 
 ## Storage migration (LocalDictate → Scribe)
 
@@ -485,11 +572,11 @@ consolidates the checks called out throughout this document:
   (`doubleTapWindow`/`NSEvent.doubleClickInterval`) before it does.
 - **Floating overlay** — confirm it shows a mic-level indicator while
   recording (bars should react to actual mic input), a cascading-dots
-  indicator while transcribing, and a brief checkmark flash after a
-  successful transcription that disappears on its own — "Pegado" if
-  auto-paste succeeded, "Listo" otherwise; confirm it does NOT flash after a
-  cancelled or failed transcription, or on app launch with a previously
-  restored transcript.
+  indicator while transcribing (including during formatting, if enabled), and
+  a brief checkmark flash after a successful transcription that disappears
+  on its own — "Pegado" if auto-paste succeeded, "Listo" otherwise; confirm
+  it does NOT flash after a cancelled or failed transcription, or on app
+  launch with a previously restored transcript.
 - **Menu bar item** — confirm the icon changes between idle, recording,
   busy/transcribing, downloading, and needs-attention states; confirm
   "Iniciar dictado"/"Detener dictado", "Copiar última transcripción",
@@ -500,8 +587,18 @@ consolidates the checks called out throughout this document:
   [docs/MVP5_AUTO_PASTE_PLAN.md](docs/MVP5_AUTO_PASTE_PLAN.md); at minimum,
   confirm a dictation started from another app pastes into that app
   automatically, "Copiar" still works regardless of the paste outcome, and
-  toggling "Pegado automático" off in the menu bar actually stops the paste
-  from happening.
+  toggling "Pegado automático" off (from the menu bar, settings menu, or
+  footer) actually stops the paste from happening.
+- **Transcript formatting** — with formatting on and Apple Intelligence
+  available, dictate a filler-heavy phrase and confirm the result is cleaned
+  up (not a verbatim Whisper dump). Switch between Casual and Formal in the
+  settings menu and confirm tone shifts without changing meaning. Turn
+  formatting off in the footer toggle and confirm the next dictation keeps
+  literal Whisper output. With formatting on but Apple Intelligence disabled,
+  confirm the attention row appears, dictation still works, and the literal
+  text is kept.
+- **Footer toggles** — confirm the Auto-pegado and Reformateo switches in
+  the system status footer stay in sync with the settings menu and menu bar.
 - **Instant replace + undo** — with a transcript already showing, record
   again (button or hotkey): it should start immediately with no dialog. Once
   transcribed, a "Deshacer reemplazo" pill should appear; clicking it should
@@ -516,14 +613,13 @@ consolidates the checks called out throughout this document:
   and confirm the app shows the blocked state with a working "Abrir Ajustes
   del Sistema" button, without crashing or getting stuck.
 - **Input Monitoring permission required** — revoke Input Monitoring for
-  Scribe and confirm `HotkeyStatusView` shows the recovery UI ("Abrir
-  Ajustes" / "Revisar permiso"), and that the record button still works even
-  though the global shortcut doesn't. Granting it back and clicking
-  "Revisar permiso" (or reactivating the app) should clear the recovery UI
-  without restarting Scribe.
-- **Visual pass** — at the window's minimum size, confirm the status card
-  and transcript card don't clip or overlap, and check both light and dark
-  appearance (System Settings > Appearance).
+  Scribe and confirm the attention row shows recovery UI ("Abrir Ajustes" /
+  refresh), and that the record button still works even though the global
+  shortcut doesn't. Granting it back and reactivating the app should clear
+  the recovery UI without restarting Scribe.
+- **Visual pass** — at the window's minimum size, confirm the hero card,
+  transcript card, and system status footer don't clip or overlap, and check
+  both light and dark appearance (System Settings > Appearance).
 - **App icon** — confirm the Dock icon, Cmd-Tab switcher, and Finder all
   show the new icon (not the default Swift/Xcode placeholder), and that it
   stays legible at the smallest sizes.
@@ -574,6 +670,12 @@ consolidates the checks called out throughout this document:
   "Pegado automático" toggle is global, with no per-app configuration. See
   [docs/MVP5_AUTO_PASTE_PLAN.md](docs/MVP5_AUTO_PASTE_PLAN.md) for the full
   list.
+- **Formatting** depends on Apple Intelligence being enabled on a supported
+  Mac; there is no cloud fallback and no "tone only, no cleanup" profile —
+  disable formatting entirely to keep literal Whisper output. Formatting
+  errors fall back silently to the raw transcript. The cleanup prompt is
+  best-effort against instruction-like content in dictated text, not a
+  security guarantee.
 
 ## Learn more
 
