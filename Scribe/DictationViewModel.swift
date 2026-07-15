@@ -102,6 +102,25 @@ enum PrimaryState: Equatable {
     case error(String)
 }
 
+/// Problema de configuración visible en la UI cuando falta un permiso o el modelo local.
+enum SetupIssue: Equatable, Identifiable {
+    case microphoneDenied
+    case inputMonitoringRequired
+    case accessibilityRequired
+    case missingModel
+    case appleIntelligenceUnavailable
+
+    var id: String {
+        switch self {
+        case .microphoneDenied: return "microphoneDenied"
+        case .inputMonitoringRequired: return "inputMonitoringRequired"
+        case .accessibilityRequired: return "accessibilityRequired"
+        case .missingModel: return "missingModel"
+        case .appleIntelligenceUnavailable: return "appleIntelligenceUnavailable"
+        }
+    }
+}
+
 @MainActor
 final class DictationViewModel: ObservableObject {
     @Published var state: AppState
@@ -135,6 +154,16 @@ final class DictationViewModel: ObservableObject {
     /// "background-first, sin clics extra" — no hay UI para "activarlo de nuevo más tarde" más
     /// allá de volver a tocar el mismo toggle.
     @Published private(set) var isAutoPasteEnabled: Bool
+    /// Permiso de Accesibilidad, necesario solo para auto-pegado en otras apps (no para Fn).
+    @Published private(set) var isAccessibilityPermissionGranted: Bool
+    /// Reformateo on-device (Apple Intelligence) del transcripto: limpia muletismos/titubeos y
+    /// ajusta el tono según `formattingProfile`. Por defecto habilitado — si Apple Intelligence
+    /// no está disponible, `applyFormattingIfNeeded` cae al texto literal sin bloquear el flujo.
+    @Published private(set) var isFormattingEnabled: Bool
+    @Published private(set) var formattingProfile: FormattingProfile
+    /// Motivo por el que el modelo on-device no está disponible ahora mismo, o `nil` si sí lo
+    /// está. Se refresca junto con `isAccessibilityPermissionGranted` (ver `refreshSystemPermissions()`).
+    @Published private(set) var appleIntelligenceUnavailableReason: AppleIntelligenceUnavailableReason?
 
     private let userDefaults: UserDefaults
     private let audioRecorder: AudioRecordingServicing
@@ -145,6 +174,8 @@ final class DictationViewModel: ObservableObject {
     private let windowActivationService: WindowActivationServicing
     private let autoPasteService: AutoPasteServicing
     private let permissionStatusController: PermissionStatusController
+    private let transcriptFormattingService: TranscriptFormatting
+    private let appleIntelligenceAvailabilityController: AppleIntelligenceAvailabilityController
     private let transcriptSessionController: TranscriptSessionController
     private let recordingMeter: RecordingMeter
     private let transcriptionAttemptCoordinator: TranscriptionAttemptCoordinator
@@ -175,6 +206,9 @@ final class DictationViewModel: ObservableObject {
         windowActivationService: WindowActivationServicing = LiveWindowActivationService(),
         autoPasteService: AutoPasteServicing = LiveAutoPasteService(),
         transcriptionService: TranscriptionServicing? = nil,
+        permissionStatusController: PermissionStatusController? = nil,
+        transcriptFormattingService: TranscriptFormatting? = nil,
+        appleIntelligenceAvailabilityController: AppleIntelligenceAvailabilityController? = nil,
         userDefaults: UserDefaults = .standard
     ) {
         self.audioRecorder = audioRecorder
@@ -184,13 +218,20 @@ final class DictationViewModel: ObservableObject {
         self.windowActivationService = windowActivationService
         self.autoPasteService = autoPasteService
         self.transcriptionService = transcriptionService ?? TranscriptionService(modelManager: modelManager)
-        self.permissionStatusController = PermissionStatusController(microphonePermissionManager: microphonePermissionManager)
+        self.permissionStatusController = permissionStatusController
+            ?? PermissionStatusController(microphonePermissionManager: microphonePermissionManager)
+        self.transcriptFormattingService = transcriptFormattingService ?? FoundationModelsTranscriptFormattingService()
+        self.appleIntelligenceAvailabilityController = appleIntelligenceAvailabilityController ?? AppleIntelligenceAvailabilityController()
         self.transcriptSessionController = TranscriptSessionController(transcriptStore: transcriptStore)
         self.recordingMeter = RecordingMeter(audioRecorder: audioRecorder)
         self.transcriptionAttemptCoordinator = TranscriptionAttemptCoordinator(transcriptionService: self.transcriptionService)
         self.userDefaults = userDefaults
         self.showOnboardingWelcome = !userDefaults.bool(forKey: Self.hasSeenOnboardingWelcomeDefaultsKey)
         self.isAutoPasteEnabled = !userDefaults.bool(forKey: Self.hasDisabledAutoPasteDefaultsKey)
+        self.isAccessibilityPermissionGranted = self.permissionStatusController.accessibilityGranted
+        self.isFormattingEnabled = !userDefaults.bool(forKey: Self.hasDisabledFormattingDefaultsKey)
+        self.formattingProfile = FormattingProfile(rawValue: userDefaults.string(forKey: Self.formattingProfileDefaultsKey) ?? "") ?? .casual
+        self.appleIntelligenceUnavailableReason = self.appleIntelligenceAvailabilityController.unavailableReason
 
         state = AppState(permission: .notDetermined, model: .missing, session: .idle, error: nil)
         statusText = "Listo"
@@ -272,6 +313,10 @@ final class DictationViewModel: ObservableObject {
 
     var isModelInstalled: Bool {
         modelManager.isModelInstalled
+    }
+
+    var isAppleIntelligenceAvailable: Bool {
+        appleIntelligenceUnavailableReason == nil
     }
 
     var downloadProgress: Double {
@@ -399,7 +444,28 @@ final class DictationViewModel: ObservableObject {
     /// los casos ya hay suficiente detalle (feedback de grabación, spinner de transcripción,
     /// botón de copiar) como para no necesitar una segunda línea de texto.
     var primaryStateHint: String? {
-        primaryState == .ready ? "Mantené Fn presionado para dictar" : nil
+        primaryState == .ready ? "Mantené Fn para hablar" : nil
+    }
+
+    /// Problemas de configuración pendientes, en orden de prioridad para la UI.
+    var setupIssues: [SetupIssue] {
+        var issues: [SetupIssue] = []
+        if state.permission == .denied || state.permission == .restricted {
+            issues.append(.microphoneDenied)
+        }
+        if hotkeyStatus == .inputMonitoringPermissionRequired {
+            issues.append(.inputMonitoringRequired)
+        }
+        if isAutoPasteEnabled, !isAccessibilityPermissionGranted {
+            issues.append(.accessibilityRequired)
+        }
+        if !isModelInstalled, !isDownloadingModel {
+            issues.append(.missingModel)
+        }
+        if isFormattingEnabled, !isAppleIntelligenceAvailable {
+            issues.append(.appleIntelligenceUnavailable)
+        }
+        return issues
     }
 
     /// Si corresponde destacar "Copiar" como acción principal del área central, en vez de un
@@ -502,6 +568,18 @@ final class DictationViewModel: ObservableObject {
     /// ese caso borde.
     func openInputMonitoringPrivacySettings() {
         permissionStatusController.openInputMonitoringPrivacySettings()
+    }
+
+    func openAccessibilityPrivacySettings() {
+        permissionStatusController.openAccessibilityPrivacySettings()
+    }
+
+    /// Vuelve a consultar permisos y el estado del atajo global. Se llama al volver a la app
+    /// desde Ajustes del Sistema.
+    func refreshSystemPermissions() {
+        refreshHotkeyStatus()
+        isAccessibilityPermissionGranted = permissionStatusController.accessibilityGranted
+        appleIntelligenceUnavailableReason = appleIntelligenceAvailabilityController.unavailableReason
     }
 
     /// Vuelve a consultar el estado del atajo global sin reiniciar el servicio. Se llama al
@@ -617,7 +695,8 @@ final class DictationViewModel: ObservableObject {
     private func transcribe(url: URL) async {
         state.session = .transcribing
         statusText = "Transcribiendo..."
-        switch await transcriptionAttemptCoordinator.transcribe(url: url) {
+        let outcome = await transcriptionAttemptCoordinator.transcribe(url: url)
+        switch outcome {
         case .cancelled:
             // Llegó tarde: `cancelTranscription()` ya revirtió el estado y limpió
             // `transcriptionTask`, así que no hay nada más que hacer con este resultado.
@@ -631,7 +710,8 @@ final class DictationViewModel: ObservableObject {
             if !transcript.isEmpty {
                 previousTranscript = transcript
             }
-            transcript = text
+            let finalText = await applyFormattingIfNeeded(text)
+            transcript = finalText
             state.session = .idle
             state.error = nil
             statusText = "Transcripción lista."
@@ -640,7 +720,7 @@ final class DictationViewModel: ObservableObject {
             audioRecorder.deleteCurrentFile()
             lastRecordingURL = nil
             lastTranscriptionOutcome = .success
-            performAutoPasteIfNeeded(text: text)
+            performAutoPasteIfNeeded(text: finalText)
 
         case .failure(let appError):
             state.session = .idle
@@ -649,6 +729,20 @@ final class DictationViewModel: ObservableObject {
             lastTranscriptionOutcome = .failure
         }
         transcriptionTask = nil
+    }
+
+    /// Pasa el transcripto literal por el reformateo on-device (Apple Intelligence) cuando el
+    /// usuario lo activó y el modelo está disponible. El reformateo es una mejora, no un
+    /// requisito: si falla o no está disponible, se devuelve el texto literal sin bloquear el
+    /// flujo (mismo criterio no bloqueante que `performAutoPasteIfNeeded`).
+    private func applyFormattingIfNeeded(_ text: String) async -> String {
+        guard isFormattingEnabled, isAppleIntelligenceAvailable, !text.isEmpty else { return text }
+        statusText = "Puliendo transcripción..."
+        do {
+            return try await transcriptFormattingService.reformat(text, profile: formattingProfile)
+        } catch {
+            return text
+        }
     }
 
     /// Efecto secundario de una transcripción exitosa, no un paso más del flujo de
@@ -762,6 +856,8 @@ final class DictationViewModel: ObservableObject {
 
     private static let hasSeenOnboardingWelcomeDefaultsKey = "Scribe.hasSeenOnboardingWelcome"
     private static let hasDisabledAutoPasteDefaultsKey = "Scribe.hasDisabledAutoPaste"
+    private static let hasDisabledFormattingDefaultsKey = "Scribe.hasDisabledFormatting"
+    private static let formattingProfileDefaultsKey = "Scribe.formattingProfile"
 
     /// Descarta `OnboardingWelcomeView` para siempre: persiste la marca en `UserDefaults` antes de
     /// apagar el flag, así que no vuelve a aparecer en el próximo lanzamiento.
@@ -778,6 +874,20 @@ final class DictationViewModel: ObservableObject {
     func setAutoPasteEnabled(_ enabled: Bool) {
         userDefaults.set(!enabled, forKey: Self.hasDisabledAutoPasteDefaultsKey)
         isAutoPasteEnabled = enabled
+    }
+
+    func setFormattingEnabled(_ enabled: Bool) {
+        userDefaults.set(!enabled, forKey: Self.hasDisabledFormattingDefaultsKey)
+        isFormattingEnabled = enabled
+    }
+
+    func setFormattingProfile(_ profile: FormattingProfile) {
+        userDefaults.set(profile.rawValue, forKey: Self.formattingProfileDefaultsKey)
+        formattingProfile = profile
+    }
+
+    func openAppleIntelligencePrivacySettings() {
+        appleIntelligenceAvailabilityController.openPrivacySettings()
     }
 
     /// Vacía la transcripción y recalcula el estado real (no asume `.idle` sin más): si falta

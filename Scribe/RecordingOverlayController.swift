@@ -21,7 +21,7 @@ final class RecordingOverlayController {
     /// Cuánto se muestra "Listo" antes de desaparecer sola.
     private static let doneDisplayDuration: Duration = .milliseconds(1200)
     private static let bottomMargin: CGFloat = 46
-    private static let fadeDuration: TimeInterval = 0.15
+    private static let fadeDuration: TimeInterval = ScribeMotion.fast
 
     init(viewModel: DictationViewModel) {
         let hostingView = NSHostingView(

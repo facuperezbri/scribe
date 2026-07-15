@@ -1,4 +1,5 @@
 import AppKit
+import ApplicationServices
 import Foundation
 
 /// Deriva el estado de permiso de micrófono y las acciones de Ajustes del Sistema asociadas,
@@ -12,13 +13,22 @@ struct PermissionStatusController {
     )
 
     private let microphonePermissionManager: MicrophonePermissionManaging
+    private let isAccessibilityPermissionGranted: () -> Bool
 
-    init(microphonePermissionManager: MicrophonePermissionManaging) {
+    init(
+        microphonePermissionManager: MicrophonePermissionManaging,
+        isAccessibilityPermissionGranted: @escaping () -> Bool = { AXIsProcessTrusted() }
+    ) {
         self.microphonePermissionManager = microphonePermissionManager
+        self.isAccessibilityPermissionGranted = isAccessibilityPermissionGranted
     }
 
     var currentStatus: MicrophonePermissionStatus {
         microphonePermissionManager.currentStatus()
+    }
+
+    var accessibilityGranted: Bool {
+        isAccessibilityPermissionGranted()
     }
 
     func requestAccess() async -> Bool {
@@ -32,6 +42,11 @@ struct PermissionStatusController {
 
     func openInputMonitoringPrivacySettings() {
         guard let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ListenEvent") else { return }
+        NSWorkspace.shared.open(url)
+    }
+
+    func openAccessibilityPrivacySettings() {
+        guard let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility") else { return }
         NSWorkspace.shared.open(url)
     }
 }

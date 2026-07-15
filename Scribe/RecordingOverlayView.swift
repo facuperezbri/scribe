@@ -34,24 +34,24 @@ struct RecordingOverlayView: View {
     }
 
     var body: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: ScribeSpacing.md) {
             indicator
             Text(label)
-                .font(.system(size: 13, weight: .medium))
-                .foregroundStyle(.white)
+                .font(ScribeTypography.overlayLabel)
+                .foregroundStyle(ScribeColors.overlayForeground)
                 .fixedSize()
         }
-        .padding(.horizontal, 14)
+        .padding(.horizontal, ScribeSpacing.lg)
         .padding(.vertical, 9)
         .background(
             Capsule(style: .continuous)
-                .fill(Color.black.opacity(0.82))
+                .fill(ScribeColors.overlayBackground)
         )
         .overlay(
             Capsule(style: .continuous)
-                .strokeBorder(Color.white.opacity(0.08))
+                .strokeBorder(ScribeColors.overlayBorder)
         )
-        .shadow(color: .black.opacity(0.35), radius: 12, y: 4)
+        .shadow(color: ScribeColors.overlayShadow, radius: 12, y: 4)
     }
 
     @ViewBuilder
@@ -60,65 +60,45 @@ struct RecordingOverlayView: View {
         case .hidden:
             EmptyView()
         case .recording:
-            RecordingLevelIndicator(level: inputLevel)
+            SpeechSignalView(
+                phase: .recording(level: inputLevel),
+                activeColor: ScribeColors.recording,
+                compact: true
+            )
         case .transcribing:
-            TranscribingIndicator()
+            OverlayTranscribingIndicator()
         case .done:
             Image(systemName: "checkmark.circle.fill")
-                .foregroundStyle(.green)
+                .foregroundStyle(ScribeColors.success)
         }
     }
 }
 
-/// Tres barritas que responden al nivel de entrada del micrófono en vez de un punto pulsante
-/// genérico, para que la burbuja tenga una firma visual propia y además confirme, de un vistazo,
-/// que el micrófono está captando audio.
-private struct RecordingLevelIndicator: View {
-    let level: Float
-
-    private static let phaseWeights: [CGFloat] = [0.4, 1.0, 0.65]
-
-    private func barHeight(_ index: Int) -> CGFloat {
-        let base: CGFloat = 4
-        let boost = CGFloat(max(0, min(1, level))) * 9
-        return base + boost * Self.phaseWeights[index]
-    }
-
-    var body: some View {
-        HStack(spacing: 3) {
-            ForEach(0..<3, id: \.self) { index in
-                Capsule()
-                    .fill(Color.red)
-                    .frame(width: 3, height: barHeight(index))
-            }
-        }
-        .frame(width: 18, height: 13)
-        .animation(.easeInOut(duration: 0.12), value: level)
-    }
-}
-
-/// Tres puntos con opacidad animada en cascada para "transcribiendo", en vez de un
-/// `ProgressView` circular que a este tamaño compacto se ve borroso.
-private struct TranscribingIndicator: View {
+/// Puntos en cascada para el overlay oscuro (contraste distinto al panel principal).
+private struct OverlayTranscribingIndicator: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var isAnimating = false
 
     var body: some View {
         HStack(spacing: 3) {
             ForEach(0..<3, id: \.self) { index in
                 Circle()
-                    .fill(Color.white.opacity(0.85))
+                    .fill(ScribeColors.overlayForeground.opacity(0.85))
                     .frame(width: 5, height: 5)
-                    .opacity(isAnimating ? 1 : 0.3)
+                    .opacity(isAnimating && !reduceMotion ? 1 : 0.3)
                     .animation(
-                        .easeInOut(duration: 0.6)
-                            .repeatForever(autoreverses: true)
-                            .delay(Double(index) * 0.15),
+                        reduceMotion
+                            ? .default
+                            : .easeInOut(duration: ScribeMotion.transcribingDot)
+                                .repeatForever(autoreverses: true)
+                                .delay(Double(index) * ScribeMotion.transcribingStagger),
                         value: isAnimating
                     )
             }
         }
         .frame(width: 18, height: 13)
         .onAppear { isAnimating = true }
+        .accessibilityHidden(true)
     }
 }
 
