@@ -62,6 +62,20 @@ final class FakeTranscriptionService: TranscriptionServicing {
     }
 }
 
+final class FakeTranscriptFormattingService: TranscriptFormatting {
+    var reformatResult: Result<String, Error> = .success("")
+    private(set) var reformatCallCount = 0
+    private(set) var lastReformattedText: String?
+    private(set) var lastProfile: FormattingProfile?
+
+    func reformat(_ text: String, profile: FormattingProfile) async throws -> String {
+        reformatCallCount += 1
+        lastReformattedText = text
+        lastProfile = profile
+        return try reformatResult.get()
+    }
+}
+
 final class FakeModelManager: ModelManaging {
     var isModelInstalled = false
     var installedModelFolder: URL?

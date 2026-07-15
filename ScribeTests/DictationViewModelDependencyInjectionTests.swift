@@ -24,7 +24,8 @@ final class DictationViewModelDependencyInjectionTests: XCTestCase {
             microphonePermissionManager: permissionManager,
             clipboardService: clipboardService,
             transcriptStore: transcriptStore,
-            transcriptionService: FakeTranscriptionService()
+            transcriptionService: FakeTranscriptionService(),
+            appleIntelligenceAvailabilityController: AppleIntelligenceAvailabilityController(unavailableReasonProvider: { .appleIntelligenceNotEnabled })
         )
 
         return (viewModel, modelManager, permissionManager, clipboardService, transcriptStore)
@@ -69,7 +70,8 @@ final class DictationViewModelDependencyInjectionTests: XCTestCase {
             clipboardService: FakeClipboardService(),
             transcriptStore: FakeTranscriptStore(),
             autoPasteService: autoPasteService,
-            transcriptionService: FakeTranscriptionService()
+            transcriptionService: FakeTranscriptionService(),
+            appleIntelligenceAvailabilityController: AppleIntelligenceAvailabilityController(unavailableReasonProvider: { .appleIntelligenceNotEnabled })
         )
 
         XCTAssertEqual(viewModel.state.session, .idle)
@@ -87,7 +89,8 @@ final class DictationViewModelDependencyInjectionTests: XCTestCase {
             microphonePermissionManager: FakeMicrophonePermissionManager(),
             clipboardService: FakeClipboardService(),
             transcriptStore: transcriptStore,
-            transcriptionService: FakeTranscriptionService()
+            transcriptionService: FakeTranscriptionService(),
+            appleIntelligenceAvailabilityController: AppleIntelligenceAvailabilityController(unavailableReasonProvider: { .appleIntelligenceNotEnabled })
         )
 
         XCTAssertEqual(viewModel.transcript, "transcripción previa")

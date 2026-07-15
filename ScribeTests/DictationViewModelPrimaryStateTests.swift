@@ -22,7 +22,7 @@ final class DictationViewModelPrimaryStateTests: XCTestCase {
 
         XCTAssertEqual(viewModel.primaryState, .ready)
         XCTAssertEqual(viewModel.primaryStateTitle, "Listo para dictar")
-        XCTAssertEqual(viewModel.primaryStateHint, "Mantené Fn presionado para dictar")
+        XCTAssertEqual(viewModel.primaryStateHint, "Mantené Fn para hablar")
         XCTAssertFalse(viewModel.showCopyCallToAction)
     }
 

@@ -38,7 +38,8 @@ final class DictationViewModelErrorCategoryTests: XCTestCase {
             microphonePermissionManager: FakeMicrophonePermissionManager(),
             clipboardService: FakeClipboardService(),
             transcriptStore: FakeTranscriptStore(),
-            transcriptionService: FakeTranscriptionService()
+            transcriptionService: FakeTranscriptionService(),
+            appleIntelligenceAvailabilityController: AppleIntelligenceAvailabilityController(unavailableReasonProvider: { .appleIntelligenceNotEnabled })
         )
 
         viewModel.handlePrimaryDictationAction()
@@ -62,7 +63,8 @@ final class DictationViewModelErrorCategoryTests: XCTestCase {
             microphonePermissionManager: permissionManager,
             clipboardService: FakeClipboardService(),
             transcriptStore: FakeTranscriptStore(),
-            transcriptionService: FakeTranscriptionService()
+            transcriptionService: FakeTranscriptionService(),
+            appleIntelligenceAvailabilityController: AppleIntelligenceAvailabilityController(unavailableReasonProvider: { .appleIntelligenceNotEnabled })
         )
 
         guard let appError = viewModel.state.error else {

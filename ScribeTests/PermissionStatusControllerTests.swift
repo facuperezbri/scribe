@@ -19,4 +19,13 @@ final class PermissionStatusControllerTests: XCTestCase {
 
         XCTAssertFalse(granted)
     }
+
+    func testAccessibilityGrantedUsesInjectedChecker() {
+        let controller = PermissionStatusController(
+            microphonePermissionManager: FakeMicrophonePermissionManager(),
+            isAccessibilityPermissionGranted: { false }
+        )
+
+        XCTAssertFalse(controller.accessibilityGranted)
+    }
 }

@@ -34,7 +34,8 @@ final class WindowActivationServiceTests: XCTestCase {
             transcriptStore: FakeTranscriptStore(),
             globalHotkeyService: hotkeyService,
             windowActivationService: windowActivationService,
-            transcriptionService: transcriptionService
+            transcriptionService: transcriptionService,
+            appleIntelligenceAvailabilityController: AppleIntelligenceAvailabilityController(unavailableReasonProvider: { .appleIntelligenceNotEnabled })
         )
     }
 

@@ -25,7 +25,8 @@ final class DictationViewModelAutoPasteTriggerTests: XCTestCase {
             transcriptStore: FakeTranscriptStore(),
             globalHotkeyService: hotkeyService,
             autoPasteService: autoPasteService,
-            transcriptionService: transcriptionService
+            transcriptionService: transcriptionService,
+            appleIntelligenceAvailabilityController: AppleIntelligenceAvailabilityController(unavailableReasonProvider: { .appleIntelligenceNotEnabled })
         )
     }
 

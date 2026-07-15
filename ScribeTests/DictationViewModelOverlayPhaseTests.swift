@@ -23,7 +23,8 @@ final class DictationViewModelOverlayPhaseTests: XCTestCase {
             microphonePermissionManager: permissionManager,
             clipboardService: FakeClipboardService(),
             transcriptStore: FakeTranscriptStore(),
-            transcriptionService: transcriptionService
+            transcriptionService: transcriptionService,
+            appleIntelligenceAvailabilityController: AppleIntelligenceAvailabilityController(unavailableReasonProvider: { .appleIntelligenceNotEnabled })
         )
     }
 

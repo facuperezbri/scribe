@@ -15,7 +15,8 @@ final class DictationViewModelInterruptionTests: XCTestCase {
             microphonePermissionManager: FakeMicrophonePermissionManager(),
             clipboardService: FakeClipboardService(),
             transcriptStore: FakeTranscriptStore(),
-            transcriptionService: FakeTranscriptionService()
+            transcriptionService: FakeTranscriptionService(),
+            appleIntelligenceAvailabilityController: AppleIntelligenceAvailabilityController(unavailableReasonProvider: { .appleIntelligenceNotEnabled })
         )
     }
 

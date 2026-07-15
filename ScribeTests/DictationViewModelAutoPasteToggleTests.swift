@@ -36,6 +36,7 @@ final class DictationViewModelAutoPasteToggleTests: XCTestCase {
             globalHotkeyService: hotkeyService,
             autoPasteService: autoPasteService,
             transcriptionService: transcriptionService,
+            appleIntelligenceAvailabilityController: AppleIntelligenceAvailabilityController(unavailableReasonProvider: { .appleIntelligenceNotEnabled }),
             userDefaults: userDefaults
         )
     }

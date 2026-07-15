@@ -35,7 +35,8 @@ final class GlobalHotkeyServiceTests: XCTestCase {
             clipboardService: FakeClipboardService(),
             transcriptStore: FakeTranscriptStore(),
             globalHotkeyService: hotkeyService,
-            transcriptionService: transcriptionService
+            transcriptionService: transcriptionService,
+            appleIntelligenceAvailabilityController: AppleIntelligenceAvailabilityController(unavailableReasonProvider: { .appleIntelligenceNotEnabled })
         )
     }
 
@@ -550,6 +551,8 @@ final class GlobalHotkeyServiceTests: XCTestCase {
         try? await Task.sleep(for: .milliseconds(5))
         XCTAssertEqual(service.pushToTalkState, .locked)
 
+        service.handleFlagsChanged(makeFlagsChangedEvent(modifierFlags: []))
+        try? await Task.sleep(for: .milliseconds(5))
         service.handleFlagsChanged(makeFlagsChangedEvent(modifierFlags: .function))
         try? await Task.sleep(for: .milliseconds(5))
         XCTAssertEqual(pressCount, 2, "el toque simple debe detener de inmediato, en el flanco de bajada")
